@@ -1,7 +1,10 @@
 import random
 import time
 from typing import Dict, List, Tuple
-
+from datetime import date, datetime
+import math
+import numpy as np
+from datetime import date, datetime
 import pandas as pd
 from jobspy import scrape_jobs
 
@@ -45,10 +48,15 @@ def run_scrape(con, run_id: int, *, terms: List[str], locations: List[str], hour
                     count = len(df)
                     total_rows += count
                     if count > 0:
-                        # Convert to list of dicts and insert
-                        payloads = [row._asdict() if hasattr(row, "_asdict") else row.to_dict() for _, row in df.iterrows()]
+                        payloads = _df_to_payloads(df)
                         new_rows += insert_payloads(con, payloads)
                     success = True
+                except ValueError as e:
+                    # Likely data/serialization issues (e.g., NaN when allow_nan=False)
+                    error_count += 1
+                    log_error(con, run_id, scope, "data_serialization", str(e), {"attempt": attempts})
+                    # Non-retryable: break the loop for this pair
+                    break
                 except Exception as e:
                     error_count += 1
                     etype = "http_429" if "429" in str(e) else ("timeout" if "timed out" in str(e).lower() else "error")
@@ -62,3 +70,38 @@ def run_scrape(con, run_id: int, *, terms: List[str], locations: List[str], hour
         "new_rows": new_rows,
         "error_count": error_count,
     }
+
+def _sanitize(obj):
+    """Recursively convert values to JSON-safe types:
+       - datetimes/dates -> ISO 8601 strings
+       - NaN/Inf -> None
+       - numpy scalars -> native Python
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, np.generic):            # numpy scalars
+        obj = obj.item()
+    if isinstance(obj, float):                 # NaN/Inf -> None
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+def _df_to_payloads(df: pd.DataFrame) -> list[dict]:
+    df = df.copy()
+
+    # Convert pandas datetime64 columns to ISO strings
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+    # Replace NaN/NaT with None
+    df = df.where(pd.notnull(df), None)
+
+    # Convert to records then deep-sanitize (handles nested/remaining NaN/Inf & numpy scalars)
+    records = df.to_dict(orient="records")
+    return [_sanitize(r) for r in records]

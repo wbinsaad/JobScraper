@@ -2,10 +2,13 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Iterable, Tuple, Dict, Any
+from datetime import date, datetime
+import numpy as np
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 def connect(sqlite_path: str) -> sqlite3.Connection:
+    print("DB path:", sqlite_path)
     con = sqlite3.connect(sqlite_path, timeout=5, isolation_level=None)  # autocommit off unless BEGIN
     con.row_factory = sqlite3.Row
     # Apply pragmas at connection level
@@ -55,12 +58,16 @@ def insert_payloads(con: sqlite3.Connection, payloads: Iterable[Dict[str, Any]])
     """
     total_before = con.total_changes
     cur = con.cursor()
-    # batch insert
     for p in payloads:
         cur.execute(
             "INSERT OR IGNORE INTO raw_jobs(payload, source) VALUES (?, 'linkedin')",
-            (json.dumps(p, ensure_ascii=False),),
+            (json.dumps(p, ensure_ascii=False, default=_json_default, allow_nan=False),)
         )
-    # total_changes counts all ops since connect; diff gives inserted count here
-    inserted = con.total_changes - total_before
-    return int(inserted)
+    return int(con.total_changes - total_before)
+
+def _json_default(o):
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+    if isinstance(o, np.generic):
+        return o.item()
+    return str(o)
