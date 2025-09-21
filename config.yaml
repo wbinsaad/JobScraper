@@ -1,0 +1,36 @@
+# config.yaml
+
+tz: "Europe/Berlin"
+
+sqlite_path: "./data/jobs.db"
+
+# Search config
+search_terms:
+  - "Werkstudent"
+  - "working student"
+
+locations:
+  - "Germany"
+  - "Munich, Bavaria, Germany"
+  - "Berlin, Germany"
+
+hours_old: 5
+results_wanted: 500
+fetch_description: true
+
+# polite delays between term/location calls (milliseconds)
+request_delay_ms:
+  min: 500
+  max: 1500
+
+# batch insert size
+batch_insert_size: 100
+
+# Optional (disabled by default)
+auth:
+  enabled: false
+  li_at: ""         # set later if you choose authenticated scraping
+  jsessionid: ""
+  bsc: ""
+
+proxy: ""           # e.g., "http://user:pass@host:port"
