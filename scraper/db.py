@@ -5,7 +5,6 @@ from typing import Iterable, Tuple, Dict, Any
 from datetime import date, datetime
 import numpy as np
 
-SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 def connect(sqlite_path: str) -> sqlite3.Connection:
     print("DB path:", sqlite_path)
@@ -17,10 +16,6 @@ def connect(sqlite_path: str) -> sqlite3.Connection:
     con.execute("PRAGMA foreign_keys=ON;")
     con.execute("PRAGMA busy_timeout=5000;")
     return con
-
-def ensure_schema(con: sqlite3.Connection) -> None:
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        con.executescript(f.read())
 
 def begin(con: sqlite3.Connection):
     con.execute("BEGIN IMMEDIATE;")  # grab write lock only when needed

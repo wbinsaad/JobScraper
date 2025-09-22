@@ -16,7 +16,6 @@ logging.basicConfig(
 def _run_once(cfg_path: str | None):
     cfg = load_config(cfg_path)
     con = connect(cfg.sqlite_path)
-    ensure_schema(con)
 
     params = {
         "search_terms": cfg.search_terms,
