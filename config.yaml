@@ -1,36 +1,45 @@
-# config.yaml
+# ./config.yaml
+scraper:
+  sqlite_path: ./data/jobs.db
+  search_terms: ["werkstudent", "working student", "student developer"]
+  locations: ["Munich, Bavaria, Germany", "Ingolstadt, Bavaria, Germany", "Nuremberg, Bavaria, Germany", "Augsburg, Bavaria, Germany"]
+  hours_old: 12
+  results_wanted: 200
+  fetch_description: true
+  delay_ms_min: 500
+  delay_ms_max: 2000
+  batch_insert_size: 200
+  # optional:
+  http_proxy:
+  linkedin:
+    li_at:
+    jsessionid:
+    bsc:
 
-tz: "Europe/Berlin"
-
-sqlite_path: "./data/jobs.db"
-
-# Search config
-search_terms:
-  - "Werkstudent"
-  - "working student"
-
-locations:
-  - "Germany"
-  - "Munich, Bavaria, Germany"
-  - "Berlin, Germany"
-
-hours_old: 5
-results_wanted: 500
-fetch_description: true
-
-# polite delays between term/location calls (milliseconds)
-request_delay_ms:
-  min: 500
-  max: 1500
-
-# batch insert size
-batch_insert_size: 100
-
-# Optional (disabled by default)
-auth:
-  enabled: false
-  li_at: ""         # set later if you choose authenticated scraping
-  jsessionid: ""
-  bsc: ""
-
-proxy: ""           # e.g., "http://user:pass@host:port"
+matcher:
+  sqlite_path: ./data/jobs.db
+  ai:
+    stage1_model: "llama-3.1-8b-instant"
+    stage2_model: "llama-3.3-70b-versatile"
+    max_output_tokens_stage1: 256
+    max_output_tokens_stage2: 512
+    rpm: 30
+    tpm: 80000
+    safety_factor: 0.9
+    per_request_soft_cap_tokens: 3000
+  thresholds:
+    include: 75
+    maybe: 55
+    min_score_to_alert: 80
+  batch:
+    stage1_size: 50
+    stage2_size: 1     # per request
+    sleep_seconds_when_idle: 30
+  notifications:
+    enabled: true
+    telegram_parse_mode: "HTML"
+  profile:
+    summary: >
+      Backend/automation engineer (ASP.NET, REST APIs, SQL, CI/CD with Docker/GitHub Actions, testing).
+      Master in UX Design (HCI, AR/VR). Interests: backend dev, automation, DevOps/cloud, UX/HCI, emerging tech.
+      Avoid: legacy, non-IT roles, native-German-only jobs. Prefer: English-friendly.

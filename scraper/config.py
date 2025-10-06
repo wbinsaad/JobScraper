@@ -30,7 +30,7 @@ class Config:
 def load_config(yaml_path: Optional[str] = None) -> Config:
     if yaml_path and os.path.exists(yaml_path):
         with open(yaml_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+            data = yaml.safe_load(f).get("scraper", {}) or {}
         cfg = Config()
         # overlay YAML values if present
         for k, v in data.items():

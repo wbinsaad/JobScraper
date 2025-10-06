@@ -7,7 +7,6 @@ import numpy as np
 
 
 def connect(sqlite_path: str) -> sqlite3.Connection:
-    print("DB path:", sqlite_path)
     con = sqlite3.connect(sqlite_path, timeout=5, isolation_level=None)  # autocommit off unless BEGIN
     con.row_factory = sqlite3.Row
     # Apply pragmas at connection level

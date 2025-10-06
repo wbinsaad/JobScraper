@@ -1,22 +1,52 @@
-version: "3.9"
-
 services:
-  scraper:
+  app:
+    # optional: a base container for shared image build if you want to use 'extends'
+    image: ${IMAGE_NAME:-jobs-app}
     build:
       context: ..
-      dockerfile: scraper/Dockerfile
-    container_name: Linkedin-scraper
-    restart: unless-stopped
-    environment:
-      - TZ=Europe/Berlin
+      dockerfile: ./Dockerfile
+
+  migrate:
+    image: ${IMAGE_NAME:-jobs-app}
+    depends_on: []
+    working_dir: /app
+    command: ["python", "infra/migrate.py"]
     volumes:
-      # DB & backups live here on the host
       - ../data:/app/data
-      # mount your YAML config into the container
       - ../config.yaml:/app/config.yaml:ro
-    # optional healthcheck (only if you add a tiny /healthz later)
-    # healthcheck:
-    #   test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
-    #   interval: 30s
-    #   timeout: 3s
-    #   retries: 5
+    environment:
+      # DB path used by migrate.py (if it reads from config, this may be unnecessary)
+      DB_PATH: /app/data/jobs.db
+
+  scraper:
+    image: ${IMAGE_NAME:-jobs-app}
+    depends_on:
+      - migrate
+    working_dir: /app
+    command: ["python", "-m", "scraper.main", "serve", "--config", "/app/config.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ../data:/app/data
+      - ../config.yaml:/app/config.yaml:ro
+    environment:
+      # optional proxy envs (forward only if used)
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+
+  matcher:
+    image: ${IMAGE_NAME:-jobs-app}
+    depends_on:
+      - migrate
+    working_dir: /app
+    command: ["python", "matcher/main.py", "--config", "/app/config.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ../data:/app/data
+      - ../config.yaml:/app/config.yaml:ro
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY:?set in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set in .env}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:?set in .env}
+      # If you use proxies for matcher:
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}

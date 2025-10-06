@@ -5,7 +5,7 @@ import os
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .config import load_config
-from .db import connect, ensure_schema, start_run, finish_run
+from .db import connect, start_run, finish_run
 from .ingest import run_scrape
 
 logging.basicConfig(

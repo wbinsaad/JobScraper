@@ -22,12 +22,15 @@ CREATE INDEX IF NOT EXISTS ix_raw_jobs_status ON raw_jobs(status);
 
 -- Scrape telemetry (you already had these)
 CREATE TABLE IF NOT EXISTS scrape_runs (
-  id           INTEGER PRIMARY KEY,
-  started_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  finished_at  DATETIME,
-  new_rows     INTEGER DEFAULT 0,
-  error_count  INTEGER DEFAULT 0,
-  params_json  TEXT NOT NULL
+  id             INTEGER PRIMARY KEY,
+  started_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at    DATETIME,
+  new_rows       INTEGER DEFAULT 0,
+  error_count    INTEGER DEFAULT 0,
+  params_json    TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'running',
+  total_requests INTEGER NOT NULL DEFAULT 0,
+  total_rows     INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS scrape_errors (
   id           INTEGER PRIMARY KEY,
