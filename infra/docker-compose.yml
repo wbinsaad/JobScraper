@@ -1,10 +1,18 @@
 services:
   app:
-    # optional: a base container for shared image build if you want to use 'extends'
     image: ${IMAGE_NAME:-jobs-app}
     build:
       context: ..
       dockerfile: ./Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../data:/app/data
+      - ../config.yaml:/app/config.yaml:ro
+    environment:
+      - FLASK_ENV=development
+    depends_on:
+      - migrate
 
   migrate:
     image: ${IMAGE_NAME:-jobs-app}

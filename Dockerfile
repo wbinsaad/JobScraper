@@ -4,22 +4,32 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System deps if needed by pandas/jobspy
+# Install system dependencies (if needed by pandas/jobspy or other dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install both apps' deps (one image)
+# Install both apps' dependencies (scraper and matcher)
 COPY scraper/requirements.txt /app/scraper/requirements.txt
 COPY matcher/requirements.txt /app/matcher/requirements.txt
 RUN pip install --no-cache-dir -r /app/scraper/requirements.txt \
     && pip install --no-cache-dir -r /app/matcher/requirements.txt
 
-# Copy code
+# Install Flask and any other dependencies for the Flask app
+COPY flask_app/requirements.txt /app/flask_app/requirements.txt
+RUN pip install --no-cache-dir -r /app/flask_app/requirements.txt
+
+# Copy Flask app code into the container
+COPY flask_app /app/flask_app
+
+# Copy the rest of the code (scraper, matcher, config files) into the container
 COPY . /app
 
-# Create data dir
+# Create data directory for the database
 RUN mkdir -p /app/data
 
+# Expose port 5000 for Flask app
+EXPOSE 5000
+
 # No default; compose sets commands per service
-CMD ["python", "-V"]
+CMD ["python", "/app/flask_app/app.py"]
