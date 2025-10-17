@@ -13,6 +13,23 @@
         Job Decisions
       </h1>
 
+      <form id="filter-form" method="GET" action="/">
+        <label for="hours"
+          >Show jobs from the last
+          <span id="hours-value">{{ hours|default(24) }}</span> hours</label
+        >
+        <input
+          type="range"
+          id="hours"
+          name="hours"
+          min="1"
+          max="48"
+          value="{{ hours|default(24) }}"
+          oninput="document.getElementById('hours-value').innerText = this.value"
+          onchange="document.getElementById('filter-form').submit()"
+        />
+      </form>
+
       <!-- Table to display job data -->
       <div class="overflow-x-auto bg-white shadow-md rounded-lg">
         <table class="min-w-full table-auto">
@@ -20,19 +37,28 @@
             <tr>
               <th class="px-6 py-3">Job Name</th>
               <th class="px-6 py-3">Company</th>
-              <th class="px-6 py-3">Score</th>
               <th class="px-6 py-3">Is IT Role</th>
               <th class="px-6 py-3">Confidence</th>
+              <th class="px-6 py-3">Scraped</th>
+              <th class="px-6 py-3">Score</th>
             </tr>
           </thead>
           <tbody>
             {% for job in jobs %}
             <tr class="border-b">
-              <td class="px-6 py-3">{{ job['job_title'] }}</td>
+              <td class="px-6 py-3">
+                <a
+                  href="{{ job['job_url'] }}"
+                  class="text-blue-700 hover:text-black"
+                  target="_blank"
+                  >{{ job['job_title'] }}</a
+                >
+              </td>
               <td class="px-6 py-3">{{ job['company_name'] }}</td>
-              <td class="px-6 py-3">{{ job['score'] }}</td>
               <td class="px-6 py-3">{{ job['is_it_role'] }}</td>
               <td class="px-6 py-3">{{ job['confidence'] }}</td>
+              <td class="px-6 py-3">{{ job['scraped_ago'] }}</td>
+              <td class="px-6 py-3">{{ job['a'] }}</td>
             </tr>
             {% endfor %}
           </tbody>
