@@ -43,3 +43,8 @@ matcher:
       Backend/automation engineer (ASP.NET, REST APIs, SQL, CI/CD with Docker/GitHub Actions, testing).
       Master in UX Design (HCI, AR/VR). Interests: backend dev, automation, DevOps/cloud, UX/HCI, emerging tech.
       Avoid: legacy, non-IT roles, native-German-only jobs. Prefer: English-friendly.
+  language_filter:
+    enabled: true
+    model: fast_langdetect        # library to use
+    german_exclude_threshold: 0.9 # exclude if German with ≥90% probability
+    min_text_length: 50           # skip detection if description shorter than 50 chars

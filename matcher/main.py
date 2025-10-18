@@ -8,11 +8,48 @@ from telegram import send_message, format_alert
 from ratelimit import make_from_cfg
 from tokens import est_tokens_stage1_batch, est_tokens_stage2_single
 from stage1 import run_stage1_with_limits
+from stage0_lang import detect_language, should_exclude_by_lang
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 import json, time
 LIMITER = None
+
+def run_stage0_language_filter(conn, raw_job_id: int, description: str, cfg: dict) -> bool:
+    """
+    Stage 0: detect job language and optionally exclude the job.
+    Creates or updates the job_decisions row safely.
+    Returns True if the job should be skipped from further processing.
+    """
+    # 1️⃣ Detect language
+    lang, conf = detect_language(description)
+    exclude = should_exclude_by_lang(lang, conf, cfg)
+    
+    # 2️⃣ Upsert language info — create row if missing
+    cursor = conn.execute("""
+        INSERT INTO job_decisions(raw_job_id, lang_code, lang_confidence, lang_excluded)
+        VALUES(?, ?, ?, ?)
+        ON CONFLICT(raw_job_id) DO UPDATE SET
+            lang_code = excluded.lang_code,
+            lang_confidence = excluded.lang_confidence,
+            lang_excluded = excluded.lang_excluded;
+    """, (raw_job_id, lang, conf, 1 if exclude else 0))
+    
+    # 3️⃣ If excluded, label the row immediately
+    if exclude:
+        conn.execute("""
+            UPDATE job_decisions
+            SET label = 'exclude',
+                score = 0,
+                reasons = json('["Excluded due to German language detection"]'),
+                decided_at = CURRENT_TIMESTAMP
+            WHERE raw_job_id = ?;
+        """, (raw_job_id,))
+        logging.info(f"[stage0] Excluded job {raw_job_id} ({lang=}, {conf=:.2f})")
+        return True
+
+    logging.debug(f"[stage0] Job {raw_job_id} language={lang} conf={conf:.2f}")
+    return False
 
 def upsert_stage1(conn, raw_job_id: int, s1: dict):
         conn.execute("""
@@ -164,13 +201,25 @@ def run_once(conn, cfg, limiter):
 
     print("Stage 1: triage new jobs")
 
-    # --- Stage 1: triage new jobs (persist results) ---
     s1_rows = fetch_for_stage1(conn, limit=max(cfg["batch"]["stage1_size"], 1))
+
+    # --- Stage 0: Language Filter ---
+    filtered_rows = []
     if s1_rows:
-        items = [{"job_id": r["id"], "title": (r["title"] or "")} for r in s1_rows]
+        for r in s1_rows:
+            desc = r["description"] or ""
+            with tx(conn):  # ensure commit
+                if run_stage0_language_filter(conn, r["id"], desc, cfg):
+                    continue
+            filtered_rows.append(r)
+    # --- End Stage 0 ---
+
+    # --- Stage 1: triage new jobs (persist results) ---
+    if filtered_rows:
+        items = [{"job_id": r["id"], "title": (r["title"] or "")} for r in filtered_rows]
         s1_results = run_stage1_with_limits(stage1_model, items, limiter=limiter, out_max=out1, per_req_soft_cap_tokens=soft_cap)
         by_id = {x["job_id"]: x for x in s1_results}
-        for r in s1_rows:
+        for r in filtered_rows:
             s1 = by_id.get(r["id"], {"is_it_role":None,"confidence":0.0,"reason":"missing"})
             is_it_role = s1.get("is_it_role")
             conf = float(s1.get("confidence") or 0.0)
