@@ -5,64 +5,103 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Job Data</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Tailwind CSS via CDN -->
   </head>
-  <body class="bg-gray-100 font-sans leading-normal tracking-normal">
-    <div class="container mx-auto p-4">
-      <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
-        Job Decisions
-      </h1>
 
-      <form id="filter-form" method="GET" action="/">
-        <label for="hours"
-          >Show jobs from the last
-          <span id="hours-value">{{ hours|default(24) }}</span> hours</label
+  <body class="bg-gray-100 font-sans text-gray-800">
+    <div class="container mx-auto px-6 py-8">
+      <!-- Header -->
+      <h1 class="text-4xl font-bold text-center mb-8">Jobs Tailored to You</h1>
+
+      <!-- Filter Bar -->
+      <div
+        class="flex flex-wrap items-center justify-between bg-white shadow-sm rounded-lg p-4 mb-6"
+      >
+        <div class="flex flex-wrap gap-4 items-center">
+          <input
+            type="text"
+            placeholder="Search by title or company..."
+            class="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:ring focus:ring-indigo-200"
+          />
+          <select
+            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
+          >
+            <option>Location</option>
+            <option>Remote</option>
+            <option>On-site</option>
+            <option>Hybrid</option>
+          </select>
+          <select
+            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
+          >
+            <option>Job Type</option>
+            <option>Full-time</option>
+            <option>Contract</option>
+            <option>Internship</option>
+          </select>
+          <select
+            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
+          >
+            <option>Match Level</option>
+            <option>Strong (80–100%)</option>
+            <option>Possible (50–79%)</option>
+            <option>Low (&lt;50%)</option>
+          </select>
+        </div>
+        <button
+          class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
         >
-        <input
-          type="range"
-          id="hours"
-          name="hours"
-          min="1"
-          max="48"
-          value="{{ hours|default(24) }}"
-          oninput="document.getElementById('hours-value').innerText = this.value"
-          onchange="document.getElementById('filter-form').submit()"
-        />
-      </form>
+          Reset Filters
+        </button>
+      </div>
 
-      <!-- Table to display job data -->
-      <div class="overflow-x-auto bg-white shadow-md rounded-lg">
-        <table class="min-w-full table-auto">
-          <thead class="bg-gray-800 text-white">
-            <tr>
-              <th class="px-6 py-3">Job Name</th>
-              <th class="px-6 py-3">Company</th>
-              <th class="px-6 py-3">Is IT Role</th>
-              <th class="px-6 py-3">Confidence</th>
-              <th class="px-6 py-3">Scraped</th>
-              <th class="px-6 py-3">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for job in jobs %}
-            <tr class="border-b">
-              <td class="px-6 py-3">
-                <a
-                  href="{{ job['job_url'] }}"
-                  class="text-blue-700 hover:text-black"
-                  target="_blank"
-                  >{{ job['job_title'] }}</a
-                >
-              </td>
-              <td class="px-6 py-3">{{ job['company_name'] }}</td>
-              <td class="px-6 py-3">{{ job['is_it_role'] }}</td>
-              <td class="px-6 py-3">{{ job['confidence'] }}</td>
-              <td class="px-6 py-3">{{ job['scraped_ago'] }}</td>
-              <td class="px-6 py-3">{{ job['a'] }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <!-- Job Cards List -->
+      <div class="space-y-4">
+        {% for job in jobs %}
+        <div
+          class="bg-white p-5 rounded-xl shadow-sm hover:shadow-md transition"
+        >
+          <div class="flex justify-between items-center mb-2">
+            <div>
+              <a
+                href="{{ job['job_url'] }}"
+                target="_blank"
+                class="text-xl font-semibold text-indigo-700 hover:text-indigo-900"
+                >{{ job['job_title'] }}</a
+              >
+              <p class="text-sm text-gray-500">
+                {{ job['company_name'] }} — {{ job['location'] }}
+              </p>
+            </div>
+
+            <span
+              class="bg-red-100 text-red-700 text-sm px-3 py-1 rounded-full font-medium"
+              >Low Match (60%)</span
+            >
+          </div>
+
+          <!-- Match Progress Bar -->
+          <div class="w-full bg-gray-200 h-2 rounded-full mb-3">
+            <div
+              class="h-2 rounded-full bg-green-500"
+              style="width: 60%;"
+            ></div>
+          </div>
+
+          <!-- Reason / Label -->
+          <div class="flex justify-between text-sm text-gray-600">
+            <p>
+              {% if job['label'] == 'include' %}
+              ✅ You’re well suited for this role
+              {% elif job['label'] == 'maybe' %}
+              🤔 This could be a potential fit
+              {% else %}
+              ❌ Not a strong match for your skills
+              {% endif %}
+            </p>
+            <p class="italic text-gray-500">Updated: {{ job['scraped_ago'] }}</p>
+          </div>
+        </div>
+        {% endfor %}
       </div>
     </div>
   </body>
