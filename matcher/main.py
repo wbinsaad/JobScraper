@@ -15,6 +15,61 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 import json, time
 LIMITER = None
 
+def _ensure_job_decision(conn, raw_job_id: int) -> int:
+    """Ensure there's a job_decisions row for the raw_job_id and return its id."""
+    conn.execute("INSERT OR IGNORE INTO job_decisions(raw_job_id) VALUES (?)", (raw_job_id,))
+    row = conn.execute("SELECT id FROM job_decisions WHERE raw_job_id=?", (raw_job_id,)).fetchone()
+    return int(row[0])
+
+def _mark_excluded(conn, raw_job_id: int, reason_list: list[str] | None = None):
+    reasons_json = json.dumps(reason_list or ["excluded"], ensure_ascii=False)
+    conn.execute(
+        """
+        INSERT INTO job_decisions(raw_job_id, label, score, reasons, decided_at, status)
+        VALUES(?, 'exclude', 0, json(?), CURRENT_TIMESTAMP, 'excluded')
+        ON CONFLICT(raw_job_id) DO UPDATE SET
+          label='exclude', score=0, reasons=excluded.reasons, decided_at=excluded.decided_at, status='excluded'
+        """,
+        (raw_job_id, reasons_json),
+    )
+
+def _mark_approved_if_complete(conn, raw_job_id: int):
+    """If all stages are good (lang not excluded, stage1 IT role, stage2 ok), set status=approved."""
+    jd = conn.execute("SELECT id FROM job_decisions WHERE raw_job_id=?", (raw_job_id,)).fetchone()
+    if not jd:
+        return
+    jd_id = int(jd[0])
+    row = conn.execute(
+        """
+        SELECT
+          COALESCE(la.excluded, 0) AS lang_excl,
+          COALESCE(s1.is_it_role, 1) AS is_it_role,
+          s2.status AS s2_status
+        FROM job_decisions jd
+        LEFT JOIN job_language_analysis la ON la.job_decision_id = jd.id
+        LEFT JOIN job_stage1_results s1 ON s1.job_decision_id = jd.id
+        LEFT JOIN job_stage2_results s2 ON s2.job_decision_id = jd.id
+        WHERE jd.id=?
+        """,
+        (jd_id,),
+    ).fetchone()
+    if not row:
+        return
+    if int(row[0]) == 0 and int(row[1] or 1) == 1 and (row[2] or '') == 'ok':
+        conn.execute(
+            """
+            UPDATE job_decisions
+            SET status='approved', decided_at = COALESCE(decided_at, CURRENT_TIMESTAMP)
+            WHERE raw_job_id=?
+            """,
+            (raw_job_id,),
+        )
+
+def _is_excluded(conn, raw_job_id: int) -> bool:
+    row = conn.execute("SELECT status FROM job_decisions WHERE raw_job_id=?", (raw_job_id,)).fetchone()
+    return bool(row and row[0] == 'excluded')
+
+
 def run_stage0_language_filter(conn, raw_job_id: int, description: str, cfg: dict) -> bool:
     """
     Stage 0: detect job language and optionally exclude the job.
@@ -25,26 +80,24 @@ def run_stage0_language_filter(conn, raw_job_id: int, description: str, cfg: dic
     lang, conf = detect_language(description)
     exclude = should_exclude_by_lang(lang, conf, cfg)
     
-    # 2️⃣ Upsert language info — create row if missing
-    cursor = conn.execute("""
-        INSERT INTO job_decisions(raw_job_id, lang_code, lang_confidence, lang_excluded)
+    # 2️⃣ Upsert language info into normalized table
+    jd_id = _ensure_job_decision(conn, raw_job_id)
+    conn.execute(
+        """
+        INSERT INTO job_language_analysis(job_decision_id, lang_code, confidence, excluded)
         VALUES(?, ?, ?, ?)
-        ON CONFLICT(raw_job_id) DO UPDATE SET
-            lang_code = excluded.lang_code,
-            lang_confidence = excluded.lang_confidence,
-            lang_excluded = excluded.lang_excluded;
-    """, (raw_job_id, lang, conf, 1 if exclude else 0))
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            lang_code=excluded.lang_code,
+            confidence=excluded.confidence,
+            excluded=excluded.excluded,
+            created_at=CURRENT_TIMESTAMP
+        """,
+        (jd_id, lang, conf, 1 if exclude else 0),
+    )
     
     # 3️⃣ If excluded, label the row immediately
     if exclude:
-        conn.execute("""
-            UPDATE job_decisions
-            SET label = 'exclude',
-                score = 0,
-                reasons = json('["Excluded due to German language detection"]'),
-                decided_at = CURRENT_TIMESTAMP
-            WHERE raw_job_id = ?;
-        """, (raw_job_id,))
+        _mark_excluded(conn, raw_job_id, ["Excluded due to language policy"])  # stage0 decision
         logging.info(f"[stage0] Excluded job {raw_job_id} ({lang=}, {conf=:.2f})")
         return True
 
@@ -52,67 +105,118 @@ def run_stage0_language_filter(conn, raw_job_id: int, description: str, cfg: dic
     return False
 
 def upsert_stage1(conn, raw_job_id: int, s1: dict):
-        conn.execute("""
-                    INSERT INTO job_decisions(
-                        raw_job_id, stage1_json, stage1_is_it_role, stage1_confidence, stage1_reason, stage1_at, stage2_status, stage2_attempts)
-                    VALUES(?, json(?), ?, ?, ?, CURRENT_TIMESTAMP, 'pending', 0)
-                    ON CONFLICT(raw_job_id) DO UPDATE SET
-                        stage1_json=excluded.stage1_json,
-                        stage1_is_it_role=excluded.stage1_is_it_role,
-                        stage1_confidence=excluded.stage1_confidence,
-                        stage1_reason=excluded.stage1_reason,
-                        stage1_at=CURRENT_TIMESTAMP
-                """, (
-                        raw_job_id,
-                        json.dumps(s1, ensure_ascii=False),
-                        s1.get("is_it_role"),
-                        s1.get("confidence"),
-                        s1.get("reason")
-                ))
+    jd_id = _ensure_job_decision(conn, raw_job_id)
+    # Persist Stage1
+    conn.execute(
+        """
+        INSERT INTO job_stage1_results(job_decision_id, is_it_role, confidence, reason)
+        VALUES(?, ?, ?, ?)
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            is_it_role=excluded.is_it_role,
+            confidence=excluded.confidence,
+            reason=excluded.reason,
+            created_at=CURRENT_TIMESTAMP
+        """,
+        (jd_id, s1.get("is_it_role"), s1.get("confidence"), s1.get("reason")),
+    )
+    # Ensure Stage2 state row exists and is pending unless already ok
+    conn.execute(
+        """
+        INSERT INTO job_stage2_results(job_decision_id, status, attempts)
+        VALUES(?, 'pending', 0)
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            status=CASE WHEN job_stage2_results.status='ok' THEN job_stage2_results.status ELSE 'pending' END
+        """,
+        (jd_id,),
+    )
 
 def finalize_exclude_from_stage1(conn, raw_job_id: int, s1: dict, note: str):
-        reasons = [f"stage1: {note}"]
-        conn.execute("""
-                    INSERT INTO job_decisions(
-                        raw_job_id, label, score, reasons, stage1_json, stage1_is_it_role, stage1_confidence, stage1_reason, stage1_at, stage2_status, decided_at)
-                    VALUES(?, 'exclude', 0, json(?), json(?), ?, ?, ?, CURRENT_TIMESTAMP, 'ok', CURRENT_TIMESTAMP)
-                    ON CONFLICT(raw_job_id) DO UPDATE SET
-                        label='exclude', score=0, reasons=excluded.reasons, stage1_json=excluded.stage1_json,
-                        stage1_is_it_role=excluded.stage1_is_it_role,
-                        stage1_confidence=excluded.stage1_confidence,
-                        stage1_reason=excluded.stage1_reason,
-                        stage1_at=excluded.stage1_at, stage2_status='ok', decided_at=excluded.decided_at
-                """, (
-                        raw_job_id,
-                        json.dumps(reasons, ensure_ascii=False),
-                        json.dumps(s1, ensure_ascii=False),
-                        s1.get("is_it_role"),
-                        s1.get("confidence"),
-                        s1.get("reason")
-                ))
+    reasons = [f"stage1: {note}"]
+    jd_id = _ensure_job_decision(conn, raw_job_id)
+    # Update final decision
+    conn.execute(
+        """
+        INSERT INTO job_decisions(raw_job_id, label, score, reasons, decided_at)
+        VALUES(?, 'exclude', 0, json(?), CURRENT_TIMESTAMP)
+        ON CONFLICT(raw_job_id) DO UPDATE SET
+            label='exclude',
+            score=0,
+            reasons=excluded.reasons,
+            decided_at=excluded.decided_at
+        """,
+        (raw_job_id, json.dumps(reasons, ensure_ascii=False)),
+    )
+    # Persist stage1 result as well (normalize)
+    conn.execute(
+        """
+        INSERT INTO job_stage1_results(job_decision_id, is_it_role, confidence, reason)
+        VALUES(?, ?, ?, ?)
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            is_it_role=excluded.is_it_role,
+            confidence=excluded.confidence,
+            reason=excluded.reason,
+            created_at=CURRENT_TIMESTAMP
+        """,
+        (jd_id, s1.get("is_it_role"), s1.get("confidence"), s1.get("reason")),
+    )
+    # Mark stage2 as ok (no need to run)
+    conn.execute(
+        """
+        INSERT INTO job_stage2_results(job_decision_id, status, attempts)
+        VALUES(?, 'ok', 0)
+        ON CONFLICT(job_decision_id) DO UPDATE SET status='ok'
+        """,
+        (jd_id,),
+    )
+    _mark_excluded(conn, raw_job_id, reasons)  # exclude after stage1
 
 def complete_stage2_success(conn, raw_job_id: int, label: str, score: int, stage2: dict):
-    conn.execute("""
-      UPDATE job_decisions
-      SET stage2_json = json(?),
-          stage2_status = 'ok',
-          stage2_attempts = stage2_attempts + 1,
-          label = ?,
-          score = ?,
-          reasons = json(?),
-          decided_at = COALESCE(decided_at, CURRENT_TIMESTAMP)
-      WHERE raw_job_id = ?
-    """, (json.dumps(stage2, ensure_ascii=False),
-          label, score, json.dumps(stage2.get("reasons") or [], ensure_ascii=False), raw_job_id))
+    jd_id = _ensure_job_decision(conn, raw_job_id)
+    # Update stage2 table
+    conn.execute(
+        """
+        INSERT INTO job_stage2_results(job_decision_id, status, attempts, payload_json)
+        VALUES(?, 'ok', 1, json(?))
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            status='ok',
+            attempts=job_stage2_results.attempts + 1,
+            payload_json=excluded.payload_json,
+            updated_at=CURRENT_TIMESTAMP
+        """,
+        (jd_id, json.dumps(stage2, ensure_ascii=False)),
+    )
+    # Update final decision
+    conn.execute(
+        """
+        UPDATE job_decisions
+        SET label = ?,
+            score = ?,
+            reasons = json(?),
+            decided_at = COALESCE(decided_at, CURRENT_TIMESTAMP)
+        WHERE raw_job_id = ?
+        """,
+        (label, score, json.dumps(stage2.get("reasons") or [], ensure_ascii=False), raw_job_id),
+    )
+    _mark_approved_if_complete(conn, raw_job_id)
 
 def complete_stage2_error(conn, raw_job_id: int, err: str):
-    conn.execute("""
-      UPDATE job_decisions
-      SET stage2_status='error',
-          stage2_attempts=stage2_attempts + 1,
-          stage2_last_error=substr(?,1,500)
-      WHERE raw_job_id=?
-    """, (err, raw_job_id))
+    jd_id = _ensure_job_decision(conn, raw_job_id)
+    conn.execute(
+        """
+        INSERT INTO job_stage2_results(job_decision_id, status, attempts, last_error)
+        VALUES(?, 'error', 1, substr(?,1,500))
+        ON CONFLICT(job_decision_id) DO UPDATE SET
+            status='error',
+            attempts=job_stage2_results.attempts + 1,
+            last_error=substr(?,1,500),
+            updated_at=CURRENT_TIMESTAMP
+        """,
+        (jd_id, err, err),
+    )
+    # Optional policy: if attempts exceed threshold or hard error, mark excluded
+    too_many = conn.execute("SELECT attempts FROM job_stage2_results WHERE job_decision_id=?", (jd_id,)).fetchone()
+    if too_many and int(too_many[0]) >= 5:
+        _mark_excluded(conn, raw_job_id, ["Stage2 failed too many times"])  # stage2 policy
 
 def load_cfg():
     import yaml
@@ -135,46 +239,125 @@ def fetch_for_stage1(conn, limit=500):
         SELECT r.id, r.title, r.company, r.location, r.description, r.job_url
         FROM raw_jobs r
         LEFT JOIN job_decisions d ON d.raw_job_id = r.id
-        WHERE d.raw_job_id IS NULL
+        WHERE d.raw_job_id IS NULL OR d.status!='excluded'
         ORDER BY r.id ASC
         LIMIT ?""", (limit,)).fetchall()
 
 def claim_stage2_batch(conn, limit=50):
-    # Claim rows needing Stage-2 (pending/error) safely
+    # Claim rows needing Stage-2 (pending/error) safely using normalized table
     with tx(conn):
-        ids = [row["raw_job_id"] for row in conn.execute("""
-            SELECT raw_job_id
-            FROM job_decisions
-            WHERE stage2_status IN ('pending','error') AND stage2_attempts < 5
-            ORDER BY raw_job_id
-            LIMIT ?""", (limit,)).fetchall()]
-        if not ids: return []
-        conn.executemany("UPDATE job_decisions SET stage2_status='processing' WHERE raw_job_id=?", [(i,) for i in ids])
+        ids = [row["raw_job_id"] for row in conn.execute(
+            """
+            SELECT jd.raw_job_id
+            FROM job_stage2_results s2
+            JOIN job_decisions jd ON jd.id = s2.job_decision_id
+            WHERE s2.status IN ('pending','error') AND s2.attempts < 5 AND COALESCE(jd.status,'pending')!='excluded'
+            ORDER BY jd.raw_job_id
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()]
+        if not ids:
+            return []
+        # mark as processing
+        conn.executemany(
+            """
+            UPDATE job_stage2_results
+            SET status='processing', updated_at=CURRENT_TIMESTAMP
+            WHERE job_decision_id=(SELECT id FROM job_decisions WHERE raw_job_id=?)
+            """,
+            [(i,) for i in ids],
+        )
     # Return full rows for processing
-    q = ",".join("?"*len(ids))
-    return conn.execute(f"""
-        SELECT r.id, r.title, r.company, r.location, r.description, r.job_url,
-               jd.stage1_json
+    q = ",".join("?" * len(ids))
+    return conn.execute(
+        f"""
+        SELECT r.id, r.title, r.company, r.location, r.description, r.job_url
         FROM raw_jobs r
-        JOIN job_decisions jd ON jd.raw_job_id = r.id
         WHERE r.id IN ({q})
         ORDER BY r.id
-    """, ids).fetchall()
+        """,
+        ids,
+    ).fetchall()
 
 def write_exclude(conn, raw_job_id: int, stage1_json: dict, reason_note: str):
-    with tx(conn):
-        conn.execute("""
-          INSERT OR IGNORE INTO job_decisions(raw_job_id, label, score, reasons, stage1_json, stage2_json)
-          VALUES(?,?,?,?,?,?)
-        """, (raw_job_id, "exclude", 0, json.dumps([reason_note], ensure_ascii=False), json.dumps(stage1_json, ensure_ascii=False), None))
+        with tx(conn):
+                jd_id = _ensure_job_decision(conn, raw_job_id)
+                # Final decision
+                conn.execute(
+                        """
+                        INSERT INTO job_decisions(raw_job_id, label, score, reasons, decided_at)
+                        VALUES(?, 'exclude', 0, json(?), CURRENT_TIMESTAMP)
+                        ON CONFLICT(raw_job_id) DO UPDATE SET
+                            label='exclude', score=0, reasons=excluded.reasons, decided_at=excluded.decided_at
+                        """,
+                        (raw_job_id, json.dumps([reason_note], ensure_ascii=False)),
+                )
+                # Persist stage1 snapshot if provided
+                conn.execute(
+                        """
+                        INSERT INTO job_stage1_results(job_decision_id, is_it_role, confidence, reason)
+                        VALUES(?, ?, ?, ?)
+                        ON CONFLICT(job_decision_id) DO UPDATE SET
+                            is_it_role=COALESCE(excluded.is_it_role, job_stage1_results.is_it_role),
+                            confidence=COALESCE(excluded.confidence, job_stage1_results.confidence),
+                            reason=COALESCE(excluded.reason, job_stage1_results.reason),
+                            created_at=CURRENT_TIMESTAMP
+                        """,
+                        (jd_id, stage1_json.get("is_it_role"), stage1_json.get("confidence"), stage1_json.get("reason")),
+                )
+                # Mark stage2 as ok/no-op
+                conn.execute(
+                        """
+                        INSERT INTO job_stage2_results(job_decision_id, status, attempts, payload_json)
+                        VALUES(?, 'ok', 0, NULL)
+                        ON CONFLICT(job_decision_id) DO UPDATE SET status='ok'
+                        """,
+                        (jd_id,),
+                )
 
 def write_final(conn, raw_job_id: int, label: str, score: int, stage1: dict, stage2: dict):
-    with tx(conn):
-        conn.execute("""
-          INSERT OR REPLACE INTO job_decisions(raw_job_id, label, score, reasons, stage1_json, stage2_json)
-          VALUES(?,?,?,?,?,?)
-        """, (raw_job_id, label, score, json.dumps(stage2.get("reasons") or [], ensure_ascii=False),
-              json.dumps(stage1, ensure_ascii=False), json.dumps(stage2, ensure_ascii=False)))
+        with tx(conn):
+                jd_id = _ensure_job_decision(conn, raw_job_id)
+                # Update final decision
+                conn.execute(
+                        """
+                        INSERT INTO job_decisions(raw_job_id, label, score, reasons, decided_at)
+                        VALUES(?, ?, ?, json(?), CURRENT_TIMESTAMP)
+                        ON CONFLICT(raw_job_id) DO UPDATE SET
+                            label=excluded.label,
+                            score=excluded.score,
+                            reasons=excluded.reasons,
+                            decided_at=excluded.decided_at
+                        """,
+                        (raw_job_id, label, score, json.dumps(stage2.get("reasons") or [], ensure_ascii=False)),
+                )
+                # Persist stage1
+                conn.execute(
+                        """
+                        INSERT INTO job_stage1_results(job_decision_id, is_it_role, confidence, reason)
+                        VALUES(?, ?, ?, ?)
+                        ON CONFLICT(job_decision_id) DO UPDATE SET
+                            is_it_role=excluded.is_it_role,
+                            confidence=excluded.confidence,
+                            reason=excluded.reason,
+                            created_at=CURRENT_TIMESTAMP
+                        """,
+                        (jd_id, stage1.get("is_it_role"), stage1.get("confidence"), stage1.get("reason")),
+                )
+                # Persist stage2 payload/status
+                conn.execute(
+                        """
+                        INSERT INTO job_stage2_results(job_decision_id, status, attempts, payload_json)
+                        VALUES(?, 'ok', 1, json(?))
+                        ON CONFLICT(job_decision_id) DO UPDATE SET
+                            status='ok',
+                            attempts=job_stage2_results.attempts + 1,
+                            payload_json=excluded.payload_json,
+                            updated_at=CURRENT_TIMESTAMP
+                        """,
+                        (jd_id, json.dumps(stage2, ensure_ascii=False)),
+                )
 
 def maybe_notify(conn, row, label, score, s2, notify_threshold):
     if not should_notify(label, score, notify_threshold): return
@@ -228,9 +411,16 @@ def run_once(conn, cfg, limiter):
             if is_it_role is False and conf >= promote_below:
                 finalize_exclude_from_stage1(conn, r["id"], s1, s1.get("reason") or "confident out")
             else:
+                # ensure stage2 is pending (if not ok)
+                jd_id = _ensure_job_decision(conn, r["id"])
                 conn.execute(
-                    "UPDATE job_decisions SET stage2_status='pending' WHERE raw_job_id=? AND stage2_status!='ok'",
-                    (r["id"],)
+                    """
+                    INSERT INTO job_stage2_results(job_decision_id, status, attempts)
+                    VALUES(?, 'pending', 0)
+                    ON CONFLICT(job_decision_id) DO UPDATE SET
+                        status=CASE WHEN job_stage2_results.status='ok' THEN job_stage2_results.status ELSE 'pending' END
+                    """,
+                    (jd_id,),
                 )
         progressed = True
 

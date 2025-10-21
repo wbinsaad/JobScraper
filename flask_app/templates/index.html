@@ -3,106 +3,390 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Job Data</title>
+    <title>Job Processing Dashboard</title>
+    <!-- TailwindCSS via CDN for simplicity -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
 
-  <body class="bg-gray-100 font-sans text-gray-800">
-    <div class="container mx-auto px-6 py-8">
+  <body class="bg-gray-50 text-gray-900 antialiased">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header -->
-      <h1 class="text-4xl font-bold text-center mb-8">Jobs Tailored to You</h1>
+      <header class="mb-6">
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">
+          <a href="{{ url_for('index') }}" class="hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
+            Job Processing Dashboard
+          </a>
+        </h1>
+        <p class="mt-1 text-sm text-gray-600">
+          Overview of jobs through language analysis, role classification, validation, and final decision.
+        </p>
+      </header>
 
-      <!-- Filter Bar -->
-      <div
-        class="flex flex-wrap items-center justify-between bg-white shadow-sm rounded-lg p-4 mb-6"
-      >
-        <div class="flex flex-wrap gap-4 items-center">
-          <input
-            type="text"
-            placeholder="Search by title or company..."
-            class="border border-gray-300 rounded-lg px-4 py-2 w-72 focus:ring focus:ring-indigo-200"
-          />
-          <select
-            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
-          >
-            <option>Location</option>
-            <option>Remote</option>
-            <option>On-site</option>
-            <option>Hybrid</option>
-          </select>
-          <select
-            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
-          >
-            <option>Job Type</option>
-            <option>Full-time</option>
-            <option>Contract</option>
-            <option>Internship</option>
-          </select>
-          <select
-            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring focus:ring-indigo-200"
-          >
-            <option>Match Level</option>
-            <option>Strong (80–100%)</option>
-            <option>Possible (50–79%)</option>
-            <option>Low (&lt;50%)</option>
-          </select>
-        </div>
-        <button
-          class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-        >
-          Reset Filters
-        </button>
-      </div>
+      <!--
+        Template data contract (from Flask):
+        - jobs: Iterable of mapping objects. Each job may expose the following keys. Missing keys are handled gracefully.
+          job.job_id: int | str
+          job.job_title: str
+          job.company_name: str
+          job.job_url: str (optional)
+          job.language: str (from job_language_analysis)
+          job.language_reason: str (optional exclusion reason at language stage)
+          job.stage1.role: str | job.s1_role: str
+          job.stage1.confidence: float | job.confidence: float
+          job.stage1.reason: str (why classified as role)
+          job.stage2.status: str (e.g., success/failed/pending) | job.s2_status
+          job.stage2.attempts: int | job.s2_attempts
+          job.stage2.last_error: str | job.s2_last_error
+          job.status: str in {pending, excluded, approved} (from job_decisions.status) | fallback to job.label
+          job.decision_at: ISO datetime string (final decision timestamp) | fallback to job.scraped_at
+          job.scraped_at: ISO datetime string (ingest time)
+          job.scraped_ago: human string (optional, used as display fallback)
+      -->
 
-      <!-- Job Cards List -->
-      <div class="space-y-4">
-        {% for job in jobs %}
-        <div
-          class="bg-white p-5 rounded-xl shadow-sm hover:shadow-md transition"
-        >
-          <div class="flex justify-between items-center mb-2">
-            <div>
-              <a
-                href="{{ job['job_url'] }}"
-                target="_blank"
-                class="text-xl font-semibold text-indigo-700 hover:text-indigo-900"
-                >{{ job['job_title'] }}</a
-              >
-              <p class="text-sm text-gray-500">
-                {{ job['company_name'] }} — {{ job['location'] }}
-              </p>
+      <!-- Filters -->
+      <section aria-label="Filters" class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5 mb-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-1 flex-col sm:flex-row gap-3 sm:items-center">
+            <!-- Search -->
+            <label for="search" class="sr-only">Search jobs</label>
+            <div class="relative sm:w-80">
+              <input id="search" type="text" placeholder="Search by Job ID, title, or company" class="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              <svg class="pointer-events-none absolute right-3 top-2.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.01l3.251 3.25a.75.75 0 1 0 1.06-1.06l-3.25-3.251A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
             </div>
 
-            <span
-              class="bg-red-100 text-red-700 text-sm px-3 py-1 rounded-full font-medium"
-              >Low Match (60%)</span
-            >
+            <!-- Status filter -->
+            <label for="statusFilter" class="sr-only">Status</label>
+            <select id="statusFilter" class="min-w-[10rem] rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="excluded">Excluded</option>
+            </select>
+
+            <!-- Time window -->
+            <label for="timeFilter" class="sr-only">Time window</label>
+            <select id="timeFilter" class="min-w-[10rem] rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="all">All time</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+            </select>
           </div>
 
-          <!-- Match Progress Bar -->
-          <div class="w-full bg-gray-200 h-2 rounded-full mb-3">
-            <div
-              class="h-2 rounded-full bg-green-500"
-              style="width: 60%;"
-            ></div>
-          </div>
-
-          <!-- Reason / Label -->
-          <div class="flex justify-between text-sm text-gray-600">
-            <p>
-              {% if job['label'] == 'include' %}
-              ✅ You’re well suited for this role
-              {% elif job['label'] == 'maybe' %}
-              🤔 This could be a potential fit
-              {% else %}
-              ❌ Not a strong match for your skills
-              {% endif %}
-            </p>
-            <p class="italic text-gray-500">Updated: {{ job['scraped_ago'] }}</p>
+          <div class="flex items-center gap-3">
+            <button id="resetBtn" type="button" class="rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Reset</button>
+            <div class="text-sm text-gray-600"><span id="countVisible">0</span> of <span id="countTotal">0</span> jobs</div>
           </div>
         </div>
-        {% endfor %}
-      </div>
+      </section>
+
+      <!-- Desktop table -->
+      <section aria-label="Jobs table" class="hidden md:block">
+        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Job</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Language</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Stage 1 • Role</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Stage 2 • Validation</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Final Status</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Decision Time</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100" id="jobsTableBody">
+              {% for job in jobs %}
+              {% set status_val = (job.status or job.label or 'pending') | lower %}
+              {% set decided_iso = job.decision_at or job.scraped_at or '' %}
+              {% set language_val = job.language or job.lang or '' %}
+              {% set title_val = job.job_title or '' %}
+              {% set company_val = job.company_name or '' %}
+              {% set role_val = (job.stage1.role if job.stage1 is defined else None) or job.s1_role or (job.is_it_role and 'IT role' or '') %}
+              <tr class="hover:bg-gray-50" data-row
+                  data-status="{{ status_val }}"
+                  data-decided-at="{{ decided_iso }}"
+                  data-job-id="{{ job.job_id }}"
+                  data-language="{{ language_val }}"
+                  data-role="{{ role_val }}"
+                  data-keywords="{{ title_val }} {{ company_val }} {{ language_val }} {{ role_val }}">
+                <!-- Job -->
+                <td class="px-4 py-4 align-top">
+                  <div class="flex items-start gap-3">
+                    <div class="mt-1 hidden lg:block">
+                      <!-- Icon -->
+                      <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.75 3A2.25 2.25 0 0 0 4.5 5.25v13.5A2.25 2.25 0 0 0 6.75 21h10.5A2.25 2.25 0 0 0 19.5 18.75V5.25A2.25 2.25 0 0 0 17.25 3H6.75Zm.75 3a.75.75 0 0 0 0 1.5h9a.75.75 0 0 0 0-1.5h-9Zm0 5.25a.75.75 0 0 0 0 1.5h9a.75.75 0 0 0 0-1.5h-9Zm0 5.25a.75.75 0 0 0 0 1.5h5.25a.75.75 0 0 0 0-1.5H7.5Z"/></svg>
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <a href="{{ job.job_url or '#' }}" target="_blank" rel="noopener" class="font-medium text-indigo-700 hover:text-indigo-900">{{ job.job_title or 'Untitled job' }}</a>
+                        <span class="text-xs text-gray-500">#{{ job.job_id }}</span>
+                      </div>
+                      <div class="text-sm text-gray-600">{{ job.company_name or '—' }}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Language -->
+                <td class="px-4 py-4 align-top">
+                  {% set lang = language_val or '—' %}
+                  <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700" title="Language detected at Stage 0">
+                    <svg class="h-3.5 w-3.5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.75a8.25 8.25 0 1 0 8.25 8.25A8.259 8.259 0 0 0 12 3.75Zm3.22 10.53a.75.75 0 0 1-1.06 0l-1.22-1.22-1.22 1.22a.75.75 0 1 1-1.06-1.06l1.22-1.22-1.22-1.22a.75.75 0 1 1 1.06-1.06l1.22 1.22 1.22-1.22a.75.75 0 0 1 1.06 1.06L14 11l1.22 1.22a.75.75 0 0 1 0 1.06Z"/></svg>
+                    {{ lang | upper }}
+                  </span>
+                  {% if job.language_reason %}
+                    <div class="mt-1 text-xs text-gray-500" title="Exclusion policy / reason">{{ job.language_reason }}</div>
+                  {% endif %}
+                </td>
+
+                <!-- Stage 1 -->
+                <td class="px-4 py-4 align-top">
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-medium">{{ role_val or '—' }}</span>
+                      {% set conf_val = (job.stage1.confidence if job.stage1 is defined else None) or job.confidence %}
+                      {% if conf_val is not none %}
+                        <span class="text-xs text-gray-500">({{ '%.0f' % (conf_val*100) if conf_val <= 1 else '%.0f' % conf_val }}%)</span>
+                      {% endif %}
+                    </div>
+                    {% set s1_reason = (job.stage1.reason if job.stage1 is defined else None) or job.s1_reason %}
+                    {% if s1_reason %}
+                      <details class="group cursor-pointer">
+                        <summary class="text-xs text-gray-600 hover:text-gray-800">Why?</summary>
+                        <div class="mt-1 text-xs text-gray-600">{{ s1_reason }}</div>
+                      </details>
+                    {% endif %}
+                  </div>
+                </td>
+
+                <!-- Stage 2 -->
+                <td class="px-4 py-4 align-top">
+                  {% set s2 = job.stage2 if job.stage2 is defined else None %}
+                  {% set s2_status = (s2.status if s2 is defined and s2.status is defined else job.s2_status) or 'pending' %}
+                  {% set s2_attempts = (s2.attempts if s2 is defined and s2.attempts is defined else job.s2_attempts) or 0 %}
+                  {% set s2_error = (s2.last_error if s2 is defined and s2.last_error is defined else job.s2_last_error) %}
+
+                  <div class="flex flex-col gap-1">
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium
+                      {% if s2_status|lower in ['success','approved'] %} bg-green-100 text-green-800
+                      {% elif s2_status|lower in ['pending','running'] %} bg-yellow-100 text-yellow-800
+                      {% elif s2_status|lower in ['failed','error','excluded'] %} bg-red-100 text-red-800
+                      {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                      {% if s2_status|lower in ['success','approved'] %}
+                        <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M2.25 12a9.75 9.75 0 1 1 19.5 0 9.75 9.75 0 0 1-19.5 0Zm13.36-2.47a.75.75 0 0 0-1.06-1.06l-4.72 4.72-1.88-1.88a.75.75 0 1 0-1.06 1.06l2.41 2.41a.75.75 0 0 0 1.06 0l5.35-5.35Z" clip-rule="evenodd"/></svg>
+                      {% elif s2_status|lower in ['pending','running'] %}
+                        <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.76 9.76 0 0 0 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6a.75.75 0 0 0 .44.68l4.5 2a.75.75 0 1 0 .62-1.36l-4.06-1.8V6Z" clip-rule="evenodd"/></svg>
+                      {% else %}
+                        <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.76 9.76 0 0 0 12 2.25Zm3.53 6.72a.75.75 0 1 0-1.06-1.06L12 10.44 9.53 7.91a.75.75 0 1 0-1.06 1.06L10.94 11.5l-2.47 2.47a.75.75 0 1 0 1.06 1.06L12 12.56l2.47 2.47a.75.75 0 1 0 1.06-1.06L13.06 11.5l2.47-2.53Z" clip-rule="evenodd"/></svg>
+                      {% endif %}
+                      {{ s2_status | capitalize }}
+                    </span>
+                    <div class="text-xs text-gray-600">Attempts: {{ s2_attempts }}</div>
+                    {% if s2_error %}
+                      <div class="text-xs text-red-700/90" title="{{ s2_error }}">Last error: {{ s2_error[:60] }}{% if s2_error|length > 60 %}…{% endif %}</div>
+                    {% endif %}
+                  </div>
+                </td>
+
+                <!-- Final Status -->
+                <td class="px-4 py-4 align-top">
+                  {% set final_status = status_val %}
+                  <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium
+                    {% if final_status == 'approved' %} bg-green-100 text-green-800
+                    {% elif final_status == 'pending' %} bg-yellow-100 text-yellow-800
+                    {% elif final_status == 'excluded' %} bg-red-100 text-red-800
+                    {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                    {% if final_status == 'approved' %}
+                      <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M2.25 12a9.75 9.75 0 1 1 19.5 0 9.75 9.75 0 0 1-19.5 0Zm13.36-2.47a.75.75 0 0 0-1.06-1.06l-4.72 4.72-1.88-1.88a.75.75 0 1 0-1.06 1.06l2.41 2.41a.75.75 0 0 0 1.06 0l5.35-5.35Z" clip-rule="evenodd"/></svg>
+                    {% elif final_status == 'pending' %}
+                      <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.76 9.76 0 0 0 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6a.75.75 0 0 0 .44.68l4.5 2a.75.75 0 1 0 .62-1.36l-4.06-1.8V6Z" clip-rule="evenodd"/></svg>
+                    {% elif final_status == 'excluded' %}
+                      <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.76 9.76 0 0 0 12 2.25Zm3.53 6.72a.75.75 0 1 0-1.06-1.06L12 10.44 9.53 7.91a.75.75 0 1 0-1.06 1.06L10.94 11.5l-2.47 2.47a.75.75 0 1 0 1.06 1.06L12 12.56l2.47 2.47a.75.75 0 1 0 1.06-1.06L13.06 11.5l2.47-2.53Z" clip-rule="evenodd"/></svg>
+                    {% endif %}
+                    {{ final_status | capitalize }}
+                  </span>
+                </td>
+
+                <!-- Decision timestamp -->
+                <td class="px-4 py-4 align-top text-sm text-gray-700">
+                  {% if decided_iso %}
+                    <time datetime="{{ decided_iso }}">{{ decided_iso }}</time>
+                  {% elif job.scraped_ago %}
+                    <span title="Ingested">{{ job.scraped_ago }}</span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Mobile cards -->
+      <section aria-label="Jobs list" class="md:hidden" id="jobsCards">
+        <div class="grid grid-cols-1 gap-3">
+          {% for job in jobs %}
+          {% set status_val = (job.status or job.label or 'pending') | lower %}
+          {% set decided_iso = job.decision_at or job.scraped_at or '' %}
+          {% set language_val = job.language or job.lang or '' %}
+          {% set title_val = job.job_title or '' %}
+          {% set company_val = job.company_name or '' %}
+          {% set role_val = (job.stage1.role if job.stage1 is defined else None) or job.s1_role or (job.is_it_role and 'IT role' or '') %}
+          {% set s2 = job.stage2 if job.stage2 is defined else None %}
+          {% set s2_status = (s2.status if s2 is defined and s2.status is defined else job.s2_status) or 'pending' %}
+          {% set s2_attempts = (s2.attempts if s2 is defined and s2.attempts is defined else job.s2_attempts) or 0 %}
+          {% set s2_error = (s2.last_error if s2 is defined and s2.last_error is defined else job.s2_last_error) %}
+
+          <article class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow" data-card
+                   data-status="{{ status_val }}"
+                   data-decided-at="{{ decided_iso }}"
+                   data-job-id="{{ job.job_id }}"
+                   data-language="{{ language_val }}"
+                   data-role="{{ role_val }}"
+                   data-keywords="{{ title_val }} {{ company_val }} {{ language_val }} {{ role_val }}">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                  <a href="{{ job.job_url or '#' }}" target="_blank" rel="noopener" class="truncate font-medium text-indigo-700 hover:text-indigo-900">{{ job.job_title or 'Untitled job' }}</a>
+                  <span class="shrink-0 text-xs text-gray-500">#{{ job.job_id }}</span>
+                </div>
+                <div class="truncate text-sm text-gray-600">{{ job.company_name or '—' }}</div>
+              </div>
+              <!-- Final status badge -->
+              <div>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium
+                  {% if status_val == 'approved' %} bg-green-100 text-green-800
+                  {% elif status_val == 'pending' %} bg-yellow-100 text-yellow-800
+                  {% elif status_val == 'excluded' %} bg-red-100 text-red-800
+                  {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                  {{ status_val | capitalize }}
+                </span>
+              </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 gap-3">
+              <div class="flex items-center justify-between text-sm">
+                <div class="text-gray-600">Language</div>
+                <div class="font-medium">{{ language_val or '—' }}</div>
+              </div>
+              <div>
+                <div class="text-sm text-gray-600">Stage 1 • Role</div>
+                <div class="text-sm"><span class="font-medium">{{ role_val or '—' }}</span>{% set conf_val = (job.stage1.confidence if job.stage1 is defined else None) or job.confidence %}{% if conf_val is not none %} <span class="text-gray-500">({{ '%.0f' % (conf_val*100) if conf_val <= 1 else '%.0f' % conf_val }}%)</span>{% endif %}</div>
+                {% set s1_reason = (job.stage1.reason if job.stage1 is defined else None) or job.s1_reason %}
+                {% if s1_reason %}<div class="mt-1 text-xs text-gray-600">{{ s1_reason }}</div>{% endif %}
+              </div>
+              <div>
+                <div class="text-sm text-gray-600">Stage 2 • Validation</div>
+                <div class="text-sm"><span class="font-medium">{{ s2_status | capitalize }}</span> <span class="text-gray-500">· Attempts: {{ s2_attempts }}</span></div>
+                {% if s2_error %}<div class="mt-1 text-xs text-red-700/90" title="{{ s2_error }}">Last error: {{ s2_error[:80] }}{% if s2_error|length > 80 %}…{% endif %}</div>{% endif %}
+              </div>
+              <div class="text-sm text-gray-700">
+                {% if decided_iso %}<time datetime="{{ decided_iso }}">{{ decided_iso }}</time>{% elif job.scraped_ago %}<span>{{ job.scraped_ago }}</span>{% else %}—{% endif %}
+              </div>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% if jobs|length == 0 %}
+        <div class="mt-12 text-center text-gray-600">No jobs to display.</div>
+      {% endif %}
     </div>
+
+    <script>
+      // Minimal client-side filtering: status, time window, and text search.
+      // Works for both the table rows (data-row) and the mobile cards (data-card) using shared data-* attributes.
+      (function () {
+        const $ = (sel, ctx = document) => ctx.querySelector(sel);
+        const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+        const searchInput = $("#search");
+        const statusFilter = $("#statusFilter");
+        const timeFilter = $("#timeFilter");
+        const resetBtn = $("#resetBtn");
+        const rows = $$('[data-row]');
+        const cards = $$('[data-card]');
+        const countVisible = $("#countVisible");
+        const countTotal = $("#countTotal");
+
+        const allItems = rows.concat(cards);
+        countTotal.textContent = rows.length || cards.length;
+
+        function inTimeWindow(iso, window) {
+          if (!iso || window === 'all') return true;
+          const t = Date.parse(iso);
+          if (Number.isNaN(t)) return true; // if unknown, don't hide
+          const now = Date.now();
+          const diff = now - t;
+          const day = 24 * 60 * 60 * 1000;
+          if (window === '24h') return diff <= day;
+          if (window === '7d') return diff <= 7 * day;
+          return true;
+        }
+
+        function matchesStatus(val, filter) {
+          if (!filter || filter === 'all') return true;
+          return (val || '').toLowerCase() === filter;
+        }
+
+        function matchesSearch(keywords, q) {
+          if (!q) return true;
+          const needle = q.trim().toLowerCase();
+          return (keywords || '').toLowerCase().includes(needle);
+        }
+
+        function applyFilters() {
+          const q = searchInput.value;
+          const status = statusFilter.value;
+          const time = timeFilter.value;
+          let visible = 0;
+
+          // Apply to table rows
+          rows.forEach((el) => {
+            const ok = matchesStatus(el.dataset.status, status)
+              && inTimeWindow(el.dataset.decidedAt, time)
+              && matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
+            el.classList.toggle('hidden', !ok);
+            if (ok) visible++;
+          });
+
+          // Apply to cards
+          cards.forEach((el) => {
+            const ok = matchesStatus(el.dataset.status, status)
+              && inTimeWindow(el.dataset.decidedAt, time)
+              && matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
+            el.classList.toggle('hidden', !ok);
+            if (ok && rows.length === 0) visible++; // count only one representation
+          });
+
+          // If both views exist, visible should reflect rows (desktop). Otherwise, cards (mobile-only rendering context)
+          if (rows.length > 0) {
+            const visRows = rows.filter(r => !r.classList.contains('hidden')).length;
+            countVisible.textContent = visRows;
+          } else {
+            const visCards = cards.filter(c => !c.classList.contains('hidden')).length;
+            countVisible.textContent = visCards;
+          }
+        }
+
+        // Reset
+        resetBtn.addEventListener('click', () => {
+          searchInput.value = '';
+          statusFilter.value = 'all';
+          timeFilter.value = 'all';
+          applyFilters();
+          searchInput.focus();
+        });
+
+        ['input', 'change'].forEach(evt => searchInput.addEventListener(evt, applyFilters));
+        statusFilter.addEventListener('change', applyFilters);
+        timeFilter.addEventListener('change', applyFilters);
+
+        // Initial render
+        applyFilters();
+      })();
+    </script>
   </body>
+  
 </html>

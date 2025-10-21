@@ -18,13 +18,16 @@ def fetch_jobs():
             job.company AS company_name,
             job.job_url AS job_url,
             job.ingested_at AS scraped_at,
-            jd.stage1_is_it_role AS is_it_role,
-            jd.stage1_confidence AS confidence,
-            jd.stage1_json AS stage1_json
+            jd.label AS label,
+            jd.score AS score,
+            s1.is_it_role AS is_it_role,
+            s1.confidence AS confidence
         FROM raw_jobs AS job
         LEFT JOIN job_decisions AS jd
             ON job.id = jd.raw_job_id
-        ORDER BY jd.stage1_is_it_role DESC , jd.stage1_confidence DESC
+        LEFT JOIN job_stage1_results AS s1
+            ON s1.job_decision_id = jd.id
+        ORDER BY s1.is_it_role DESC, s1.confidence DESC
         LIMIT 100
     """
 
