@@ -50,25 +50,25 @@
             <!-- Search -->
             <label for="search" class="sr-only">Search jobs</label>
             <div class="relative sm:w-80">
-              <input id="search" type="text" placeholder="Search by Job ID, title, or company" class="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              <input id="search" type="text" value="{{ q or '' }}" placeholder="Search by Job ID, title, or company" class="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
               <svg class="pointer-events-none absolute right-3 top-2.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.01l3.251 3.25a.75.75 0 1 0 1.06-1.06l-3.25-3.251A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
             </div>
 
             <!-- Status filter -->
             <label for="statusFilter" class="sr-only">Status</label>
             <select id="statusFilter" class="min-w-[10rem] rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="excluded">Excluded</option>
+              <option value="all" {{ 'selected' if (status or 'all') == 'all' else '' }}>All Statuses</option>
+              <option value="pending" {{ 'selected' if (status or '') == 'pending' else '' }}>Pending</option>
+              <option value="approved" {{ 'selected' if (status or '') == 'approved' else '' }}>Approved</option>
+              <option value="excluded" {{ 'selected' if (status or '') == 'excluded' else '' }}>Excluded</option>
             </select>
 
             <!-- Time window -->
             <label for="timeFilter" class="sr-only">Time window</label>
             <select id="timeFilter" class="min-w-[10rem] rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-              <option value="all">All time</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
+              <option value="all" {{ 'selected' if (time_filter or 'all') == 'all' else '' }}>All time</option>
+              <option value="24h" {{ 'selected' if (time_filter or '') == '24h' else '' }}>Last 24 hours</option>
+              <option value="7d" {{ 'selected' if (time_filter or '') == '7d' else '' }}>Last 7 days</option>
             </select>
           </div>
 
@@ -327,7 +327,7 @@
 
         function matchesStatus(val, filter) {
           if (!filter || filter === 'all') return true;
-          return (val || '').toLowerCase() === filter;
+          return (val | '').toLowerCase() === filter;
         }
 
         function matchesSearch(keywords, q) {
@@ -336,57 +336,66 @@
           return (keywords || '').toLowerCase().includes(needle);
         }
 
-        function applyFilters() {
+        // Client-side search only (status/time are handled server-side)
+        function applySearch() {
           const q = searchInput.value;
-          const status = statusFilter.value;
-          const time = timeFilter.value;
           let visible = 0;
 
-          // Apply to table rows
           rows.forEach((el) => {
-            const ok = matchesStatus(el.dataset.status, status)
-              && inTimeWindow(el.dataset.decidedAt, time)
-              && matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
+            const ok = matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
             el.classList.toggle('hidden', !ok);
             if (ok) visible++;
           });
 
-          // Apply to cards
           cards.forEach((el) => {
-            const ok = matchesStatus(el.dataset.status, status)
-              && inTimeWindow(el.dataset.decidedAt, time)
-              && matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
+            const ok = matchesSearch(`${el.dataset.keywords} ${el.dataset.jobId}`, q);
             el.classList.toggle('hidden', !ok);
-            if (ok && rows.length === 0) visible++; // count only one representation
+            if (ok && rows.length === 0) visible++;
           });
 
-          // If both views exist, visible should reflect rows (desktop). Otherwise, cards (mobile-only rendering context)
-          if (rows.length > 0) {
-            const visRows = rows.filter(r => !r.classList.contains('hidden')).length;
-            countVisible.textContent = visRows;
-          } else {
-            const visCards = cards.filter(c => !c.classList.contains('hidden')).length;
-            countVisible.textContent = visCards;
+          const total = rows.length > 0
+            ? rows.filter(r => !r.classList.contains('hidden')).length
+            : cards.filter(c => !c.classList.contains('hidden')).length;
+          countVisible.textContent = total;
+        }
+
+        function pushServerFilters() {
+          const params = new URLSearchParams(window.location.search);
+          const s = (statusFilter.value || 'all').toLowerCase();
+          const t = (timeFilter.value || 'all').toLowerCase();
+          const q = (searchInput.value || '').trim();
+
+          if (s === 'all') params.delete('status'); else params.set('status', s);
+          if (t === 'all') params.delete('time'); else params.set('time', t);
+          if (q) params.set('q', q); else params.delete('q');
+
+          const next = params.toString();
+          if (next !== window.location.search.slice(1)) {
+            window.location.search = next;
           }
         }
 
-        // Reset
+        // Reset -> clear filters and reload
         resetBtn.addEventListener('click', () => {
           searchInput.value = '';
           statusFilter.value = 'all';
           timeFilter.value = 'all';
-          applyFilters();
-          searchInput.focus();
+          pushServerFilters();
         });
 
-        ['input', 'change'].forEach(evt => searchInput.addEventListener(evt, applyFilters));
-        statusFilter.addEventListener('change', applyFilters);
-        timeFilter.addEventListener('change', applyFilters);
+        // Server-side filters
+        statusFilter.addEventListener('change', pushServerFilters);
+        timeFilter.addEventListener('change', pushServerFilters);
+
+        // Search locally (optional: submit to server on Enter)
+        ['input'].forEach(evt => searchInput.addEventListener(evt, applySearch));
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') pushServerFilters();
+        });
 
         // Initial render
-        applyFilters();
+        applySearch();
       })();
     </script>
   </body>
-  
 </html>
