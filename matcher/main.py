@@ -233,15 +233,33 @@ def load_cfg():
     with open(cfg_path,"r",encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-def fetch_for_stage1(conn, limit=500):
-    # Jobs with no job_decisions row yet
+def fetch_for_stage0(conn, limit=500):
+    # Jobs not language-triaged yet (no job_language_analysis row), and not excluded
     return conn.execute("""
         SELECT r.id, r.title, r.company, r.location, r.description, r.job_url
         FROM raw_jobs r
         LEFT JOIN job_decisions d ON d.raw_job_id = r.id
-        WHERE d.raw_job_id IS NULL OR d.status!='excluded'
+        LEFT JOIN job_language_analysis la ON la.job_decision_id = d.id
+        WHERE COALESCE(d.status,'')!='excluded'
+          AND la.job_decision_id IS NULL
         ORDER BY r.id ASC
-        LIMIT ?""", (limit,)).fetchall()
+        LIMIT ?
+    """, (limit,)).fetchall()
+
+def fetch_for_stage1(conn, limit=500):
+    # Jobs that passed Stage-0 (language analyzed and not excluded), but have no Stage-1 result yet
+    return conn.execute("""
+        SELECT r.id, r.title, r.company, r.location, r.description, r.job_url
+        FROM raw_jobs r
+        JOIN job_decisions d ON d.raw_job_id = r.id
+        JOIN job_language_analysis la ON la.job_decision_id = d.id
+        LEFT JOIN job_stage1_results s1 ON s1.job_decision_id = d.id
+        WHERE COALESCE(d.status,'')!='excluded'
+          AND COALESCE(la.excluded,0)=0
+          AND s1.job_decision_id IS NULL
+        ORDER BY r.id ASC
+        LIMIT ?
+    """, (limit,)).fetchall()
 
 def claim_stage2_batch(conn, limit=50):
     # Claim rows needing Stage-2 (pending/error) safely using normalized table
@@ -382,27 +400,25 @@ def run_once(conn, cfg, limiter):
 
     progressed = False
 
-    print("Stage 1: triage new jobs")
-
-    s1_rows = fetch_for_stage1(conn, limit=max(cfg["batch"]["stage1_size"], 1))
-
-    # --- Stage 0: Language Filter ---
-    filtered_rows = []
-    if s1_rows:
-        for r in s1_rows:
+    print("Stage 0: triage new jobs")
+    s0_limit = max(cfg["batch"].get("stage0_size", cfg["batch"]["stage1_size"]), 1)
+    s0_rows = fetch_for_stage0(conn, limit=s0_limit)
+    print(f"  Found {len(s0_rows)} new jobs for stage 0")
+    if s0_rows:
+        for r in s0_rows:
             desc = r["description"] or ""
             with tx(conn):  # ensure commit
-                if run_stage0_language_filter(conn, r["id"], desc, cfg):
-                    continue
-            filtered_rows.append(r)
-    # --- End Stage 0 ---
+                run_stage0_language_filter(conn, r["id"], desc, cfg)
+        progressed = True
 
-    # --- Stage 1: triage new jobs (persist results) ---
-    if filtered_rows:
-        items = [{"job_id": r["id"], "title": (r["title"] or "")} for r in filtered_rows]
+    print("Stage 1: triage new jobs")
+    s1_rows = fetch_for_stage1(conn, limit=max(cfg["batch"]["stage1_size"], 1))
+    print(f"  Found {len(s1_rows)} new jobs for stage 1")
+    if s1_rows:
+        items = [{"job_id": r["id"], "title": (r["title"] or "")} for r in s1_rows]
         s1_results = run_stage1_with_limits(stage1_model, items, limiter=limiter, out_max=out1, per_req_soft_cap_tokens=soft_cap)
         by_id = {x["job_id"]: x for x in s1_results}
-        for r in filtered_rows:
+        for r in s1_rows:
             s1 = by_id.get(r["id"], {"is_it_role":None,"confidence":0.0,"reason":"missing"})
             is_it_role = s1.get("is_it_role")
             conf = float(s1.get("confidence") or 0.0)
