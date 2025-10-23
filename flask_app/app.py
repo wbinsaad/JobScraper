@@ -47,8 +47,8 @@ def fetch_jobs(status: str = "all", time_window: str = "all", q: str | None = No
             jd.decided_at     AS decision_at,
 
             -- Language analysis (Stage 0)
-            jla.language      AS language,
-            jla.reason        AS language_reason,
+            jla.lang_code      AS language,
+            ROUND(jla.confidence * 100) AS language_confidence,
 
             -- Stage 1 (role classification)
             s1.is_it_role     AS is_it_role,

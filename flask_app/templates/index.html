@@ -132,8 +132,8 @@
                     <svg class="h-3.5 w-3.5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.75a8.25 8.25 0 1 0 8.25 8.25A8.259 8.259 0 0 0 12 3.75Zm3.22 10.53a.75.75 0 0 1-1.06 0l-1.22-1.22-1.22 1.22a.75.75 0 1 1-1.06-1.06l1.22-1.22-1.22-1.22a.75.75 0 1 1 1.06-1.06l1.22 1.22 1.22-1.22a.75.75 0 0 1 1.06 1.06L14 11l1.22 1.22a.75.75 0 0 1 0 1.06Z"/></svg>
                     {{ lang | upper }}
                   </span>
-                  {% if job.language_reason %}
-                    <div class="mt-1 text-xs text-gray-500" title="Exclusion policy / reason">{{ job.language_reason }}</div>
+                  {% if job.language_confidence %}
+                    <div class="mt-1 text-xs text-gray-500" title="Exclusion policy / reason">{{ job.language_confidence }}</div>
                   {% endif %}
                 </td>
 
