@@ -6,7 +6,13 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Function to fetch data from SQLite database
-def fetch_jobs(status: str = "all", time_window: str = "all", q: str | None = None, limit: int = 500):
+def fetch_jobs(
+    status: str = "all",
+    time_min: int | None = None,
+    time_max: int | None = None,
+    q: str | None = None,
+    limit: int = 500
+):
     conn = sqlite3.connect('/app/data/jobs.db')  # Adjust the path if needed
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -14,21 +20,31 @@ def fetch_jobs(status: str = "all", time_window: str = "all", q: str | None = No
     conditions = []
     params = []
 
+    # --- Status filter ---
     status = (status or "all").lower()
     if status in ("pending", "approved", "excluded"):
         conditions.append("LOWER(COALESCE(jd.status, 'pending')) = ?")
         params.append(status)
 
-    time_window = (time_window or "all").lower()
-    if time_window in ("24h", "7d"):
-        delta = "-24 hours" if time_window == "24h" else "-7 days"
-        conditions.append("COALESCE(jd.decided_at, job.ingested_at) >= datetime('now', ?)")
-        params.append(delta)
+    # --- Time range filter (slider support) ---
+    # time_min and time_max are in hours from NOW backwards
+    if time_min is not None and time_max is not None:
+        # Convert hours to datetime range:
+        # Include only jobs whose decided_at/ingested_at between now - max_hours and now - min_hours
+        conditions.append("""
+            COALESCE(jd.decided_at, job.ingested_at)
+            BETWEEN datetime('now', ?) AND datetime('now', ?)
+        """)
+        params.append(f'-{int(time_max)} hours')
+        params.append(f'-{int(time_min)} hours')
 
+    # --- Text search ---
     if q:
         like = f"%{q}%"
         # Include language in server-side search
-        conditions.append("(job.title LIKE ? OR job.company LIKE ? OR job.job_url LIKE ? OR jla.language LIKE ?)")
+        conditions.append(
+            "(job.title LIKE ? OR job.company LIKE ? OR job.job_url LIKE ? OR jla.language LIKE ?)"
+        )
         params.extend([like, like, like, like])
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -101,11 +117,23 @@ def fetch_jobs(status: str = "all", time_window: str = "all", q: str | None = No
 @app.route('/')
 def index():
     status = (request.args.get('status') or 'all').lower()
-    time_filter = (request.args.get('time') or 'all').lower()
     q = (request.args.get('q') or '').strip()
-    # Increase the limit to cover typical use; keep reasonable cap
-    jobs = fetch_jobs(status=status, time_window=time_filter, q=q, limit=1000)
-    return render_template('index.html', jobs=jobs, status=status, time_filter=time_filter, q=q)
+
+    try:
+        time_min = int(request.args.get('time_min')) if request.args.get('time_min') else None
+        time_max = int(request.args.get('time_max')) if request.args.get('time_max') else None
+    except ValueError:
+        time_min = time_max = None
+
+    jobs = fetch_jobs(status=status, time_min=time_min, time_max=time_max, q=q, limit=1000)
+    return render_template(
+        'index.html',
+        jobs=jobs,
+        status=status,
+        time_min=time_min,
+        time_max=time_max,
+        q=q
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

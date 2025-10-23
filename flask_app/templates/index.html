@@ -4,6 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Job Processing Dashboard</title>
+    <style>
+      /* Base: prevent track from blocking clicks */
+      .range-thumb {
+        pointer-events: none;
+      }
+
+      /* Make only the thumb draggable */
+      .range-thumb::-webkit-slider-thumb {
+        appearance: none;
+        pointer-events: auto;
+        width: 14px;
+        height: 14px;
+        background: #4f46e5;
+        border-radius: 50%;
+        cursor: pointer;
+        position: relative;
+        z-index: 3;
+      }
+      .range-thumb::-moz-range-thumb {
+        pointer-events: auto;
+        width: 14px;
+        height: 14px;
+        background: #4f46e5;
+        border-radius: 50%;
+        cursor: pointer;
+        position: relative;
+        z-index: 3;
+      }
+
+      /* Transparent track (since we draw our own colored bar) */
+      .range-thumb::-webkit-slider-runnable-track {
+        background: transparent;
+        height: 6px;
+      }
+      .range-thumb::-moz-range-track {
+        background: transparent;
+        height: 6px;
+      }
+
+      /* Z-index layering */
+      #timeMin { z-index: 2; }
+      #timeMax { z-index: 3; }
+
+    </style>
     <!-- TailwindCSS via CDN for simplicity -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
@@ -63,13 +107,41 @@
               <option value="excluded" {{ 'selected' if (status or '') == 'excluded' else '' }}>Excluded</option>
             </select>
 
-            <!-- Time window -->
-            <label for="timeFilter" class="sr-only">Time window</label>
-            <select id="timeFilter" class="min-w-[10rem] rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-              <option value="all" {{ 'selected' if (time_filter or 'all') == 'all' else '' }}>All time</option>
-              <option value="24h" {{ 'selected' if (time_filter or '') == '24h' else '' }}>Last 24 hours</option>
-              <option value="7d" {{ 'selected' if (time_filter or '') == '7d' else '' }}>Last 7 days</option>
-            </select>
+            <!-- Dual-handle time range slider -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-96">
+              <label class="text-sm font-medium text-gray-700">Time range</label>
+
+              <div class="relative w-full h-6 flex items-center">
+                <!-- Track -->
+                <div class="absolute w-full h-2 bg-gray-200 rounded-full"></div>
+
+                <!-- Active selection bar -->
+                <div id="timeRangeTrack" class="absolute h-2 bg-indigo-400 rounded-full"></div>
+
+                <!-- Min handle -->
+                <input
+                  id="timeMin"
+                  type="range"
+                  min="0"
+                  max="168"
+                  value="{{ time_min if time_min is not none else 0 }}"
+                  class="range-thumb absolute w-full appearance-none bg-transparent"
+                />
+
+                <!-- Max handle -->
+                <input
+                  id="timeMax"
+                  type="range"
+                  min="0"
+                  max="168"
+                  value="{{ time_max if time_max is not none else 168 }}"
+                  class="range-thumb absolute w-full appearance-none bg-transparent"
+                />
+              </div>
+
+              <span id="timeRangeLabel" class="text-sm text-gray-600 w-36 text-right">All time</span>
+            </div>
+
           </div>
 
           <div class="flex items-center gap-3">
@@ -303,7 +375,6 @@
 
         const searchInput = $("#search");
         const statusFilter = $("#statusFilter");
-        const timeFilter = $("#timeFilter");
         const resetBtn = $("#resetBtn");
         const rows = $$('[data-row]');
         const cards = $$('[data-card]');
@@ -379,13 +450,11 @@
         resetBtn.addEventListener('click', () => {
           searchInput.value = '';
           statusFilter.value = 'all';
-          timeFilter.value = 'all';
           pushServerFilters();
         });
 
         // Server-side filters
         statusFilter.addEventListener('change', pushServerFilters);
-        timeFilter.addEventListener('change', pushServerFilters);
 
         // Search locally (optional: submit to server on Enter)
         ['input'].forEach(evt => searchInput.addEventListener(evt, applySearch));
@@ -396,6 +465,69 @@
         // Initial render
         applySearch();
       })();
+
+      const timeMin = document.getElementById("timeMin");
+      const timeMax = document.getElementById("timeMax");
+      const timeRangeLabel = document.getElementById("timeRangeLabel");
+      const timeRangeTrack = document.getElementById("timeRangeTrack");
+
+      if (timeMin && timeMax && timeRangeTrack) {
+        const maxRange = parseInt(timeMax.max, 10);
+
+        function formatHours(h) {
+          if (h <= 0) return "Now";
+          if (h < 24) return `${h}h`;
+          const d = (h / 24).toFixed(1).replace(/\.0$/, "");
+          return `${d}d`;
+        }
+
+        function updateRange() {
+          let minVal = parseInt(timeMin.value);
+          let maxVal = parseInt(timeMax.value);
+          if (minVal > maxVal - 1) {
+            // Prevent overlap
+            minVal = maxVal - 1;
+            timeMin.value = minVal;
+          }
+
+          // Calculate percentage positions
+          const percentMin = (minVal / maxRange) * 100;
+          const percentMax = (maxVal / maxRange) * 100;
+
+          // Update track bar position and width
+          timeRangeTrack.style.left = percentMin + "%";
+          timeRangeTrack.style.width = (percentMax - percentMin) + "%";
+
+          // Update label text
+          timeRangeLabel.textContent =
+            minVal <= 0 && maxVal >= maxRange
+              ? "All time"
+              : `From ${formatHours(minVal)} → ${formatHours(maxVal)}`;
+        }
+
+        timeMin.addEventListener("input", updateRange);
+        timeMax.addEventListener("input", updateRange);
+
+        // Submit to server when user releases mouse
+        [timeMin, timeMax].forEach((slider) =>
+        slider.addEventListener("change", () => {
+          const params = new URLSearchParams(window.location.search);
+          const minVal = parseInt(timeMin.value, 10);
+          const maxVal = parseInt(timeMax.value, 10);
+
+          if (minVal <= 0 && maxVal >= maxRange) {
+            params.delete("time_min");
+            params.delete("time_max");
+          } else {
+            params.set("time_min", minVal);
+            params.set("time_max", maxVal);
+          }
+          window.location.search = params.toString();
+        })
+      );
+
+        updateRange();
+      }
     </script>
   </body>
 </html>
