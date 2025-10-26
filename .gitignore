@@ -211,3 +211,7 @@ __marimo__/
 
 # data files
 data/*
+
+# docker override and flask
+docker-compose.override.yml
+docker-compose.flask.yml
