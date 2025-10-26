@@ -1,0 +1,67 @@
+version: 2
+updates:
+  # Python packages for the Flask app service
+  - package-ecosystem: "pip"
+    directory: "/flask_app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
+    labels: ["dependencies", "python", "flask_app"]
+    groups:
+      patch-minor:
+        update-types: ["patch", "minor"]
+
+  # Python packages for the matcher service
+  - package-ecosystem: "pip"
+    directory: "/matcher"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:05"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
+    labels: ["dependencies", "python", "matcher"]
+    groups:
+      patch-minor:
+        update-types: ["patch", "minor"]
+
+  # Python packages for the scraper service
+  - package-ecosystem: "pip"
+    directory: "/scraper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:10"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
+    labels: ["dependencies", "python", "scraper"]
+    groups:
+      patch-minor:
+        update-types: ["patch", "minor"]
+
+  # Docker base image updates (root Dockerfile builds the app image)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:20"
+    labels: ["dependencies", "docker"]
+    groups:
+      docker-patch-minor:
+        update-types: ["patch", "minor"]
+
+  # GitHub Actions workflow updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:30"
+    labels: ["dependencies", "ci"]
+    groups:
+      gha-patch-minor:
+        update-types: ["patch", "minor"]
