@@ -21,7 +21,7 @@ def detect_language(text: str) -> Tuple[Optional[str], float]:
             return result.get("lang"), float(result.get("score", 0))
 
         return None, 0.0
-    except Exception as e:
+    except Exception:
         return None, 0.0
 
 

@@ -1,5 +1,6 @@
 # matcher/tokens.py
-import math, re
+import math
+import re
 _WORD_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
 def est_tokens_text(s: str) -> int:

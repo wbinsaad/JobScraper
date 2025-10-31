@@ -1,10 +1,9 @@
 import random
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from datetime import date, datetime
 import math
 import numpy as np
-from datetime import date, datetime
 import pandas as pd
 from jobspy import scrape_jobs
 

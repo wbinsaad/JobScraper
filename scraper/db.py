@@ -1,7 +1,6 @@
 import json
 import sqlite3
-from pathlib import Path
-from typing import Iterable, Tuple, Dict, Any
+from typing import Iterable, Dict, Any
 from datetime import date, datetime
 import numpy as np
 

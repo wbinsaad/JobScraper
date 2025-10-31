@@ -1,18 +1,19 @@
-import os, time, json, logging
+import os
+import time
+import json
+import logging
 from db import connect, tx
-from stage1 import stage1_batch
 from stage2 import stage2_single
 from decisions import decide_label_min, should_notify
 from telegram import send_message, format_alert
 
 from ratelimit import make_from_cfg
-from tokens import est_tokens_stage1_batch, est_tokens_stage2_single
+from tokens import est_tokens_stage2_single
 from stage1 import run_stage1_with_limits
 from stage0_lang import detect_language, should_exclude_by_lang
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-import json, time
 LIMITER = None
 
 def _ensure_job_decision(conn, raw_job_id: int) -> int:
@@ -497,7 +498,7 @@ def main():
     while True:
         try:
             progressed = run_once(conn, cfg, limiter=LIMITER)
-        except Exception as e:
+        except Exception:
             logging.exception("Matcher error")
             progressed = False
         if not progressed:

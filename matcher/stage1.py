@@ -67,7 +67,8 @@ def run_stage1_with_limits(model: str, items: list[dict], *, limiter: RateLimite
     - Retry cap per micro-batch
     - After exceeding max retries, log and skip the batch (will be picked up next run)
     """
-    import time, random
+    import time
+    import random
 
     results = []
     i = 0

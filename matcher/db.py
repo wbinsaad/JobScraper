@@ -1,4 +1,6 @@
-import os, sqlite3, json
+import os
+import sqlite3
+import json
 
 DB_PATH = os.getenv("SQLITE_PATH", "/app/data/jobs.db")
 

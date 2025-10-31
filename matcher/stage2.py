@@ -1,4 +1,4 @@
-from ai_client import chat_json, RateLimitError
+from ai_client import chat_json
 
 SYSTEM = "You analyze a job and output STRICT JSON only."
 
