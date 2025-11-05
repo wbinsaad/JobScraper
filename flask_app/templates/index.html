@@ -73,6 +73,7 @@
           job.job_title: str
           job.company_name: str
           job.job_url: str (optional)
+          job.company_logo: str (optional URL from raw_jobs.payload)
           job.language: str (from job_language_analysis)
           job.language_reason: str (optional exclusion reason at language stage)
           job.stage1.role: str | job.s1_role: str
@@ -184,11 +185,32 @@
                 <td class="px-4 py-4 align-top">
                   <div class="flex items-start gap-3">
                     <div class="mt-1 hidden lg:block">
+                      {% if job.company_logo %}
+                        <img
+                          src="{{ job.company_logo }}"
+                          alt="{{ job.company_name or 'Company' }} logo"
+                          class="h-6 w-6 rounded object-contain ring-1 ring-gray-200 bg-white"
+                          loading="lazy"
+                          decoding="async"
+                          referrerpolicy="no-referrer"
+                        />
+                      {% else %}
                       <!-- Icon -->
                       <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.75 3A2.25 2.25 0 0 0 4.5 5.25v13.5A2.25 2.25 0 0 0 6.75 21h10.5A2.25 2.25 0 0 0 19.5 18.75V5.25A2.25 2.25 0 0 0 17.25 3H6.75Zm.75 3a.75.75 0 0 0 0 1.5h9a.75.75 0 0 0 0-1.5h-9Zm0 5.25a.75.75 0 0 0 0 1.5h9a.75.75 0 0 0 0-1.5h-9Zm0 5.25a.75.75 0 0 0 0 1.5h5.25a.75.75 0 0 0 0-1.5H7.5Z"/></svg>
+                      {% endif %}
                     </div>
                     <div>
                       <div class="flex items-center gap-2">
+                        {% if job.company_logo %}
+                          <img
+                            src="{{ job.company_logo }}"
+                            alt="{{ job.company_name or 'Company' }} logo"
+                            class="h-5 w-5 rounded object-contain ring-1 ring-gray-200 bg-white lg:hidden"
+                            loading="lazy"
+                            decoding="async"
+                            referrerpolicy="no-referrer"
+                          />
+                        {% endif %}
                         <a href="{{ job.job_url or '#' }}" target="_blank" rel="noopener" class="font-medium text-indigo-700 hover:text-indigo-900">{{ job.job_title or 'Untitled job' }}</a>
                         <span class="text-xs text-gray-500">#{{ job.job_id }}</span>
                       </div>
@@ -347,6 +369,16 @@
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2 min-w-0">
+                  {% if job.company_logo %}
+                    <img
+                      src="{{ job.company_logo }}"
+                      alt="{{ job.company_name or 'Company' }} logo"
+                      class="h-5 w-5 rounded object-contain ring-1 ring-gray-200 bg-white"
+                      loading="lazy"
+                      decoding="async"
+                      referrerpolicy="no-referrer"
+                    />
+                  {% endif %}
                   <a href="{{ job.job_url or '#' }}" target="_blank" rel="noopener" class="truncate font-medium text-indigo-700 hover:text-indigo-900">{{ job.job_title or 'Untitled job' }}</a>
                   <span class="shrink-0 text-xs text-gray-500">#{{ job.job_id }}</span>
                 </div>

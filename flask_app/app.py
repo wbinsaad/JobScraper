@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 from utils import time_ago
 import sqlite3
 from datetime import datetime
+import json
 
 app = Flask(__name__)
 
@@ -73,7 +74,11 @@ def fetch_jobs(
             -- Stage 2 (optional, if you need it in the UI)
             s2.status         AS s2_status,
             s2.attempts       AS s2_attempts,
-            s2.last_error     AS s2_last_error
+            s2.last_error     AS s2_last_error,
+
+            -- Company logo from raw_jobs.payload JSON
+            json_extract(job.payload, '$.company_logo') AS company_logo,
+            job.payload AS payload_json
         FROM raw_jobs AS job
         LEFT JOIN job_decisions AS jd
             ON job.id = jd.raw_job_id
@@ -101,6 +106,19 @@ def fetch_jobs(
     jobs = []
     for row in rows:
         job = dict(row)
+
+        # Fallback if JSON1 isn't available or company_logo is null
+        if not job.get('company_logo'):
+            try:
+                payload_val = job.get('payload_json')
+                if payload_val:
+                    payload_obj = json.loads(payload_val) if isinstance(payload_val, (str, bytes)) else payload_val
+                    if isinstance(payload_obj, dict):
+                        job['company_logo'] = payload_obj.get('company_logo')
+            except Exception:
+                pass
+
+        # Human-friendly scraped_ago
         if job.get('scraped_at'):
             try:
                 scraped_dt = datetime.fromisoformat(job['scraped_at'])
@@ -109,6 +127,9 @@ def fetch_jobs(
                 job['scraped_ago'] = "unknown"
         else:
             job['scraped_ago'] = "unknown"
+
+        # Trim payload from the response to reduce size
+        job.pop('payload_json', None)
         jobs.append(job)
 
     return jobs
