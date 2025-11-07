@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from utils import time_ago
 import sqlite3
 from datetime import datetime
@@ -26,6 +26,10 @@ def fetch_jobs(
     if status in ("pending", "approved", "excluded"):
         conditions.append("LOWER(COALESCE(jd.status, 'pending')) = ?")
         params.append(status)
+    elif status == "active":
+        # everything except excluded
+        conditions.append("LOWER(COALESCE(jd.status, 'pending')) <> ?")
+        params.append("excluded")
 
     # --- Time range filter (slider support) ---
     # time_min and time_max are in hours from NOW backwards
@@ -137,6 +141,12 @@ def fetch_jobs(
 # Route to display job data
 @app.route('/')
 def index():
+    # Redirect to include status=active if missing/empty, preserving other query params
+    if not request.args.get('status'):
+        args = request.args.to_dict(flat=True)
+        args['status'] = 'active'
+        return redirect(url_for('index', **args), code=302)
+
     status = (request.args.get('status') or 'all').lower()
     q = (request.args.get('q') or '').strip()
 
