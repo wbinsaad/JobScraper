@@ -3,42 +3,48 @@ from ai_client import chat_json, RateLimitError
 
 SYSTEM = """You are a strict JSON classifier. Decide if each job title is an IT role.
 
-Rules:
-- Return true ONLY if the title clearly and unambiguously refers to a role in Information Technology.
-- Information Technology includes roles related to computing, software, data, systems, DevOps, machine learning, or digital infrastructure.
-- If the title is ambiguous or does not clearly indicate IT, classify as false.
+Normalize before deciding:
+- Lowercase; strip bracketed gender tags (e.g., "(f/m/d)"), seniority (intern/working student/trainee), and hiring suffixes.
+- Ignore company names, locations, team names, and emojis.
+- Expand synonyms: "ux"="user experience", "ui"="user interface", "sre"="site reliability", "it"="information technology".
+
+Definitions:
+- IT roles include: software engineering/dev, data/analytics/ML/AI, cloud/devops/sre, security/infosec, IT support/systems/admin, QA/testing (software), databases/platform/infrastructure, and *digital product design for software (ux/ui/user research)* [INCLUSIVE_POLICY=on].
+- If you prefer to exclude UX/UI from IT, set [INCLUSIVE_POLICY=off] and only treat "ux engineer" or "ui developer" as IT.
+
+Non-IT (unless title explicitly ties to software/tech build): marketing, sales, HR, finance, operations, general "support" or "customer support", office admin, non-technical design (graphic/visual/brand), industrial design, content/copywriting.
+
+Ambiguity rule:
+- If the IT connection is **clear and specific**, classify `true`.
+- If ambiguous/unclear, classify `false`.
 
 Confidence:
-- confidence ∈ [0.00, 1.00], two decimals.
-- It measures how sure you are that your classification is correct (1.00 = absolute certainty).
-- Prefer 0.99/0.01 over 1.00/0.00 unless absolutely certain.
-- If uncertain but leaning toward one label, choose that label and lower confidence (typically 0.60-0.75).
-
-Confidence scale (guideline):
-| Range | Meaning |
-|--------|----------|
-| 1.00 | Certain |
-| 0.95-0.99 | Very confident |
-| 0.85-0.94 | Confident |
-| 0.75-0.84 | Somewhat confident |
-| 0.60-0.74 | Low confidence (ambiguous) |
-| < 0.60 | Not allowed — pick likely label ≥ 0.60 |
-
-Decision threshold:
-- Classify as true only if the IT connection is clear and specific.
-- If unsure or ambiguous, classify as false and reduce confidence accordingly.
+- `confidence` ∈ [0.60, 1.00], two decimals. Never output < 0.60.
+- 0.95–0.99 = very confident; 0.85–0.94 = confident; 0.75–0.84 = somewhat; 0.60–0.74 = low (ambiguous).
+- Prefer 0.99/0.61 over 1.00/0.60 unless absolutely certain.
 
 Output (JSON ONLY):
 {
   "results": [
-    { "job_id": <id>, "is_it_role": true|false, "confidence": number ∈ [0.00, 1.00], "reason": <string> },
+    { "job_id": <id>, "is_it_role": true|false, "confidence": number, "reason": <short phrase> }
   ]
 }
-
 Constraints:
 - Preserve input order.
-- No extra keys, comments, or text.
 - Deterministic output (temperature = 0).
+- `reason` must mention the deciding keyword(s).
+
+Examples (INCLUSIVE_POLICY=on):
+- "UX Designer" → true, "digital product design"
+- "User Experience Researcher" → true, "ux research for software"
+- "Customer Support Specialist" → false, "non-technical support"
+- "QA Engineer" → true, "software testing"
+- "IT Support Technician" → true, "it support"
+- "Graphic Designer" → false, "non-technical design"
+
+Examples (INCLUSIVE_POLICY=off):
+- "UX Designer" → false, "design, not engineering"
+- "UX Engineer" → true, "engineering"
 """
 
 def build_user(items: List[Dict]) -> str:
