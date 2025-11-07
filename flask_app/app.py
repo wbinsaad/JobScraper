@@ -141,10 +141,19 @@ def fetch_jobs(
 # Route to display job data
 @app.route('/')
 def index():
-    # Redirect to include status=active if missing/empty, preserving other query params
-    if not request.args.get('status'):
-        args = request.args.to_dict(flat=True)
+    # Redirect to include defaults: status=active and last 24 hours, preserving other query params
+    args = request.args.to_dict(flat=True)
+    changed = False
+    if not args.get('status'):
         args['status'] = 'active'
+        changed = True
+    if not args.get('time_min'):
+        args['time_min'] = '0'     # now
+        changed = True
+    if not args.get('time_max'):
+        args['time_max'] = '24'    # 24 hours ago
+        changed = True
+    if changed:
         return redirect(url_for('index', **args), code=302)
 
     status = (request.args.get('status') or 'all').lower()
