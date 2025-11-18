@@ -6,6 +6,7 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - "127.0.0.1:5000:5000"
+    restart: unless-stopped
     volumes:
       - /var/lib/jobs-app/data:/app/data
       - ../config.yaml:/app/config.yaml:ro
