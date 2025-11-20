@@ -24,6 +24,10 @@ jobs:
           cd infra
           export IMAGE_NAME="jobs-app:${GITHUB_SHA}"
           docker compose down
+          
+          # Clean up old unused images
+          docker image prune -f
+
           docker compose build --no-cache
           docker compose up -d --remove-orphans
 
