@@ -1,5 +1,5 @@
 requests
-pydantic==2.12.4
+pydantic==2.12.5
 PyYAML==6.0.3
 python-dotenv==1.2.1
 fast-langdetect==1.0.0
