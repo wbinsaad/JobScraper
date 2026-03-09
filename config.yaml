@@ -1,8 +1,8 @@
 # ./config.yaml
 scraper:
   sqlite_path: ./data/jobs.db
-  search_terms: ["werkstudent", "working student", "student developer"]
-  locations: ["Munich, Bavaria, Germany", "Ingolstadt, Bavaria, Germany", "Nuremberg, Bavaria, Germany", "Augsburg, Bavaria, Germany"]
+  search_terms: ["software engineer", "software developer", "software"]
+  locations: ["Melbourne, Victoria, Australia", "Broadmeadows, Victoria, Australia"]
   hours_old: 12
   results_wanted: 200
   fetch_description: true
@@ -40,9 +40,9 @@ matcher:
     telegram_parse_mode: "HTML"
   profile:
     summary: >
-      Backend/automation engineer (ASP.NET, REST APIs, SQL, CI/CD with Docker/GitHub Actions, testing).
+      Backend/automation engineer (ASP.NET, Python, Javascript, REST APIs, SQL, CI/CD with Docker/GitHub Actions, testing).
       Master in UX Design (HCI, AR/VR). Interests: backend dev, automation, DevOps/cloud, UX/HCI, emerging tech.
-      Avoid: legacy, non-IT roles, native-German-only jobs. Prefer: English-friendly.
+      Avoid: legacy, non-IT roles.
   language_filter:
     enabled: true
     model: fast_langdetect        # library to use
