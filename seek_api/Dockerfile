@@ -12,7 +12,7 @@ COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy API code
-COPY api/ /app/
+COPY seek_api/ /app/
 
 # Environment
 ENV PYTHONUNBUFFERED=1
