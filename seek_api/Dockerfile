@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
-COPY api/requirements.txt .
+COPY seek_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy API code
-COPY api/ /app/
+COPY seek_api/ /app/
 
 # Environment
 ENV PYTHONUNBUFFERED=1
