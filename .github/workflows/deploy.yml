@@ -7,6 +7,26 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
+    env:
+      SEEK_DATABASE_ENGINE: ${{ vars.SEEK_DATABASE_ENGINE }}
+      SQLITE_DB_PATH: ${{ vars.SQLITE_DB_PATH }}
+      SEEK_DATABASE_TABLE: ${{ vars.SEEK_DATABASE_TABLE }}
+
+      POSTGRESQL_HOST: ${{ vars.POSTGRESQL_HOST }}
+      POSTGRESQL_PORT: ${{ vars.POSTGRESQL_PORT }}
+      POSTGRESQL_USER: ${{ vars.POSTGRESQL_USER }}
+      POSTGRESQL_DATABASE: ${{ vars.POSTGRESQL_DATABASE }}
+      POSTGRESQL_TABLE: ${{ vars.POSTGRESQL_TABLE }}
+
+      POSTGRESQL_PASSWORD: ${{ vars.POSTGRESQL_PASSWORD }}
+
+      # Optional explicit aliases (set if you use them in Environment vars)
+      POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+      POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+      POSTGRES_TABLE: ${{ vars.POSTGRES_TABLE }}
+      POSTGRES_PASSWORD: ${{ vars.POSTGRES_PASSWORD }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
