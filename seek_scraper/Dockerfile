@@ -15,14 +15,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only dependency manifest first to maximize cache reuse
-COPY requirements.txt /app/requirements.txt
+COPY seek_scraper/requirements.txt .
 
 # Reuse pip download/wheel cache across rebuilds
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install -r /app/requirements.txt
+    python -m pip install -r requirements.txt
 
 # Safest behavior-preserving copy.
 # If you confirm the exact runtime files, replace this with narrower COPY lines.
-COPY . /app
+COPY seek_scraper/ /app/
 
 CMD ["python", "main.py"]
