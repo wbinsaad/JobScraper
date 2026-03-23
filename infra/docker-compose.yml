@@ -14,6 +14,40 @@ services:
       - FLASK_ENV=development
     depends_on:
       - migrate
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  seek_api:
+    image: ${IMAGE_NAME:-jobs-app}
+    build:
+      context: ..
+      dockerfile: ../seek_api/Dockerfile
+    container_name: seek_api
+    environment:
+      DATABASE_ENGINE: ${DATABASE_ENGINE:?DATABASE_ENGINE is required}
+      SQLITE_DB_PATH: ${SQLITE_DB_PATH:-/app/data/seek_jobs.sqlite3}
+      DATABASE_TABLE: ${DATABASE_TABLE:?DATABASE_TABLE is required}
+
+      POSTGRESQL_HOST: ${POSTGRESQL_HOST:-${POSTGRES_HOST:-}}
+      POSTGRESQL_PORT: ${POSTGRESQL_PORT:-${POSTGRES_PORT:-}}
+      POSTGRESQL_USER: ${POSTGRESQL_USER:-${POSTGRES_USER:-}}
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD:-${POSTGRES_PASSWORD:-}}
+      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-${POSTGRES_DB:-}}
+      POSTGRESQL_TABLE: ${POSTGRESQL_TABLE:-${DATABASE_TABLE:?DATABASE_TABLE is required}}
+
+      POSTGRES_HOST: ${POSTGRES_HOST:-${POSTGRESQL_HOST:-}}
+      POSTGRES_PORT: ${POSTGRES_PORT:-${POSTGRESQL_PORT:-}}
+      POSTGRES_USER: ${POSTGRES_USER:-${POSTGRESQL_USER:-}}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${POSTGRESQL_PASSWORD:-}}
+      POSTGRES_DB: ${POSTGRES_DB:-${POSTGRESQL_DATABASE:-}}
+      POSTGRES_TABLE: ${POSTGRES_TABLE:-${POSTGRESQL_TABLE:-${DATABASE_TABLE:?DATABASE_TABLE is required}}}
+    ports:
+      - "127.0.0.1:6059:8000"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - /var/lib/seek-app/data:/app/data
+    restart: unless-stopped
 
   migrate:
     image: ${IMAGE_NAME:-jobs-app}
@@ -26,6 +60,8 @@ services:
     environment:
       # DB path used by migrate.py (if it reads from config, this may be unnecessary)
       DB_PATH: /app/data/jobs.db
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
 
   scraper:
     image: ${IMAGE_NAME:-jobs-app}
@@ -41,6 +77,8 @@ services:
       # optional proxy envs (forward only if used)
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
 
   matcher:
     image: ${IMAGE_NAME:-jobs-app}
@@ -59,3 +97,5 @@ services:
       # If you use proxies for matcher:
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
