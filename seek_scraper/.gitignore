@@ -1,0 +1,21 @@
+# Environment variables
+.env
+**/.env
+scraper/.env
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+.vscode/
+
+# Local settings
+/logs/
+
+# Persistent data (SQLite database and scraper output)
+/data/
+/output/

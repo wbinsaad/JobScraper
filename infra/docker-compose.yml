@@ -48,6 +48,45 @@ services:
       - /var/lib/seek-app/data:/app/data
     restart: unless-stopped
 
+  seek_scraper:
+    build:
+      context: ..
+      dockerfile: ./seek_scraper/Dockerfile
+    container_name: seekspider-scheduler
+    environment:
+      DATABASE_ENGINE: ${SEEK_DATABASE_ENGINE:?SEEK_DATABASE_ENGINE is required}
+      SQLITE_DB_PATH: ${SQLITE_DB_PATH:-/app/data/seek_jobs.sqlite3}
+      DATABASE_TABLE: ${SEEK_DATABASE_TABLE:?SEEK_DATABASE_TABLE is required}
+
+      POSTGRESQL_HOST: ${POSTGRESQL_HOST:-${POSTGRES_HOST:-}}
+      POSTGRESQL_PORT: ${POSTGRESQL_PORT:-${POSTGRES_PORT:-}}
+      POSTGRESQL_USER: ${POSTGRESQL_USER:-${POSTGRES_USER:-}}
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD:-${POSTGRES_PASSWORD:-}}
+      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-${POSTGRES_DB:-}}
+      POSTGRESQL_TABLE: ${POSTGRESQL_TABLE:-${DATABASE_TABLE:?DATABASE_TABLE is required}}
+
+      POSTGRES_HOST: ${POSTGRES_HOST:-${POSTGRESQL_HOST:-}}
+      POSTGRES_PORT: ${POSTGRES_PORT:-${POSTGRESQL_PORT:-}}
+      POSTGRES_USER: ${POSTGRES_USER:-${POSTGRESQL_USER:-}}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${POSTGRESQL_PASSWORD:-}}
+      POSTGRES_DB: ${POSTGRES_DB:-${POSTGRESQL_DATABASE:-}}
+      POSTGRES_TABLE: ${POSTGRES_TABLE:-${POSTGRESQL_TABLE:-${DATABASE_TABLE:?DATABASE_TABLE is required}}}
+
+      SCHEDULER_TIMEZONE: Australia/Melbourne
+      WEEKDAY_SCHEDULE_TIMES: "08:07,10:02,12:13,14:06,16:07,18:31,22:09"
+      WEEKEND_SCHEDULE_TIMES: "09:41,14:37,17:31,21:51"
+      SPIDER_NAME: seek
+      SPIDER_ARGS: "region=Melbourne"
+      SCRAPY_BIN: scrapy
+      SCRAPY_PROJECT_DIR: /app/scraper
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RUN_ON_START: "true"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - /var/lib/seek-app/data:/app/data
+    restart: unless-stopped
+
   migrate:
     image: ${IMAGE_NAME:-jobs-app}
     depends_on: []
