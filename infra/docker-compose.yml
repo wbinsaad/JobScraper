@@ -18,11 +18,10 @@ services:
       - "com.centurylinklabs.watchtower.enable=false"
 
   seek_api:
-    image: ${IMAGE_NAME:-jobs-app}
+    image: ${seek_api:-jobs-app-seek_api}
     build:
       context: ..
       dockerfile: ./seek_api/Dockerfile
-    container_name: seek_api
     environment:
       DATABASE_ENGINE: ${SEEK_DATABASE_ENGINE:?SEEK_DATABASE_ENGINE is required}
       SQLITE_DB_PATH: ${SQLITE_DB_PATH:-/app/data/seek_jobs.sqlite3}

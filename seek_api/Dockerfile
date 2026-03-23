@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /app/seek_api
+WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
-COPY requirements.txt .
+COPY seek_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy API code
+COPY seek_api/ /app/
 
 # Environment
 ENV PYTHONUNBUFFERED=1
