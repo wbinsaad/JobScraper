@@ -79,7 +79,7 @@ services:
       SPIDER_NAME: seek
       SPIDER_ARGS: "region=Melbourne"
       SCRAPY_BIN: scrapy
-      SCRAPY_PROJECT_DIR: /app/scraper
+      SCRAPY_PROJECT_DIR: /app
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RUN_ON_START: "true"
     labels:
