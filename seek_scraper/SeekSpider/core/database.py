@@ -25,7 +25,7 @@ class DatabaseManager:
             raise ValueError('SQLITE_DB_PATH is required when DATABASE_ENGINE=sqlite')
 
         current_file = Path(__file__).resolve()
-        project_root = current_file.parents[3]
+        project_root = current_file.parents[2]
         schema_path = project_root / 'docker' / 'sqlite' / 'init' / '001-init-seek_jobs.sqlite.sql'
 
         if not schema_path.is_file():
