@@ -19,6 +19,10 @@ RUN pip install --no-cache-dir -r /app/scraper/requirements.txt \
 COPY flask_app/requirements.txt /app/flask_app/requirements.txt
 RUN pip install --no-cache-dir -r /app/flask_app/requirements.txt
 
+# Install dependencies for jobspy_api
+COPY jobspy_api/requirements.txt /app/jobspy_api/requirements.txt
+RUN pip install --no-cache-dir -r /app/jobspy_api/requirements.txt
+
 # Copy Flask app code into the container
 COPY flask_app /app/flask_app
 

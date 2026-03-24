@@ -17,6 +17,23 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
 
+  jobspy_api:
+    image: ${IMAGE_NAME:-jobs-app}
+    depends_on:
+      - migrate
+    working_dir: /app
+    command: ["uvicorn", "jobspy_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:6060:8000"
+    restart: unless-stopped
+    volumes:
+      - /var/lib/jobs-app/data:/app/data
+      - ../config.yaml:/app/config.yaml:ro
+    environment:
+      SQLITE_PATH: /app/data/jobs.db
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
   seek_api:
     image: ${seek_api:-jobs-app-seek_api}
     build:
@@ -53,7 +70,6 @@ services:
     build:
       context: ..
       dockerfile: ./seek_scraper/Dockerfile
-    container_name: seekspider-scheduler
     environment:
       DATABASE_ENGINE: ${SEEK_DATABASE_ENGINE:?SEEK_DATABASE_ENGINE is required}
       SQLITE_DB_PATH: ${SQLITE_DB_PATH:-/app/data/seek_jobs.sqlite3}
