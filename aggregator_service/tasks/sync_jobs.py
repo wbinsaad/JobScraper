@@ -1,3 +1,5 @@
+import threading
+
 from aggregator_service.services.sync_service import run_sync
 
 
@@ -7,8 +9,12 @@ class SyncJobsTask:
     def __init__(self, con_factory, connectors: dict):
         self._con_factory = con_factory
         self._connectors = connectors
+        self._lock = threading.Lock()
 
     def run(self, *, trigger_type: str, selected_sources: list[str] | None = None) -> dict:
+        if not self._lock.acquire(blocking=False):
+            return {"status": "running", "message": "sync is already in progress"}
+
         con = self._con_factory()
         try:
             return run_sync(
@@ -20,3 +26,4 @@ class SyncJobsTask:
             )
         finally:
             con.close()
+            self._lock.release()
