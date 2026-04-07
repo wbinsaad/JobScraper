@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from aggregator_service.api.state import get_con_factory
 
@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health(request):
+def health(request: Request):
     con_factory = get_con_factory(request)
     con = con_factory()
     try:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from aggregator_service.api.state import get_con_factory
 from aggregator_service.db import rows_to_dicts
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/debug")
 
 @router.get("/api-requests")
 def list_api_requests(
-    request,
+    request: Request,
     source_name: str | None = Query(default=None),
     run_id: int | None = Query(default=None),
     success_flag: bool | None = Query(default=None),
@@ -93,7 +93,7 @@ def list_api_requests(
 
 
 @router.get("/api-requests/{request_id}")
-def get_api_request_detail(request_id: int, request):
+def get_api_request_detail(request_id: int, request: Request):
     con = get_con_factory(request)()
     try:
         row = con.execute(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from aggregator_service.api.state import get_con_factory
 from aggregator_service.db import rows_to_dicts
@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 @router.get("/status")
-def get_status(request):
+def get_status(request: Request):
     con = get_con_factory(request)()
     try:
         latest = con.execute(
@@ -30,7 +30,7 @@ def get_status(request):
 
 @router.get("/jobs")
 def list_jobs(
-    request,
+    request: Request,
     source_name: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
