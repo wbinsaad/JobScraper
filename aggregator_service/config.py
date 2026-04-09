@@ -35,7 +35,7 @@ def get_settings() -> Settings:
         request_timeout_seconds=int(os.getenv("AGG_REQUEST_TIMEOUT_SECONDS", "20")),
         page_limit_jobspy=int(os.getenv("AGG_JOBSPY_LIMIT", "100")),
         page_limit_seek=int(os.getenv("AGG_SEEK_LIMIT", "100")),
-        scheduler_enabled=_to_bool(os.getenv("AGG_SCHEDULER_ENABLED"), False),
+        scheduler_enabled=_to_bool(os.getenv("AGG_SCHEDULER_ENABLED"), True),
         scheduler_interval_seconds=int(os.getenv("AGG_SCHEDULER_INTERVAL_SECONDS", "600")),
         response_excerpt_max_bytes=int(os.getenv("AGG_RESPONSE_EXCERPT_MAX_BYTES", "4000")),
     )
