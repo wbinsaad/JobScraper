@@ -24,7 +24,7 @@ Standalone FastAPI service that:
 - `SEEK_API_BASE_URL` default `http://seek_api:8000`
 - `AGG_REQUEST_TIMEOUT_SECONDS` default `20`
 - `AGG_SCHEDULER_ENABLED` default `true`
-- `AGG_SCHEDULER_INTERVAL_SECONDS` default `600`
+- `AGG_SCHEDULER_INTERVAL_SECONDS` default `900`
 
 ## Local run
 
