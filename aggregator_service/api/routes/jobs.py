@@ -58,7 +58,7 @@ def list_jobs(
             FROM jobs_canonical c
             {join}
             {where}
-            ORDER BY c.last_seen_at DESC
+            ORDER BY c.first_seen_at DESC
             LIMIT ? OFFSET ?
             """,
             [*params, limit, offset],
