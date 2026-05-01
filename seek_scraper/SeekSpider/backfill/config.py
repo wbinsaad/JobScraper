@@ -11,8 +11,8 @@ class BackfillConfig:
     """Configuration for job description backfill"""
 
     # Processing settings
-    delay: float = 5.0  # Base delay between requests in seconds
-    workers: int = 3  # Number of concurrent workers (1-5)
+    delay: float = 10.0  # Base delay between requests in seconds
+    workers: int = 1  # Number of concurrent workers (1-5)
     limit: Optional[int] = None  # Maximum jobs to process (None = no limit)
 
     # Browser settings
@@ -23,7 +23,7 @@ class BackfillConfig:
     restart_interval: int = 30  # Restart driver every N jobs (serial mode only)
     max_consecutive_failures: int = 3  # Max failures before driver restart
     max_job_retries: int = 2  # Max retries for a single job
-    page_load_timeout: int = 60  # Page load timeout in seconds
+    page_load_timeout: int = 300  # Page load timeout in seconds
 
     # Filtering
     region_filter: Optional[str] = None  # Filter jobs by region
