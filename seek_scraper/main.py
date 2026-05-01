@@ -16,6 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 LOGGER = logging.getLogger("seek-scheduler")
 RUN_LOCK = threading.Lock()
+BACKFILL_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,10 @@ class SchedulerConfig:
     spider_name: str
     spider_args: Tuple[str, ...]
     run_on_start: bool
+    backfill_after_scrape: bool
+    backfill_python_bin: str
+    backfill_project_dir: str
+    backfill_args: Tuple[str, ...]
 
 
 def configure_logging() -> None:
@@ -72,6 +77,16 @@ def parse_spider_args(value: str) -> Tuple[str, ...]:
     return tuple(args)
 
 
+def parse_backfill_args(value: str) -> Tuple[str, ...]:
+    value = value.strip()
+    if not value:
+        return tuple()
+    try:
+        return tuple(shlex.split(value, posix=os.name != "nt"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid BACKFILL_ARGS: {exc}") from exc
+
+
 def build_config() -> SchedulerConfig:
     timezone = os.getenv("SCHEDULER_TIMEZONE", "Australia/Melbourne")
     legacy_schedule = os.getenv("SCHEDULE_TIMES")
@@ -90,6 +105,10 @@ def build_config() -> SchedulerConfig:
     spider_name = os.getenv("SPIDER_NAME", "seek")
     spider_args = parse_spider_args(os.getenv("SPIDER_ARGS", "region=Melbourne"))
     run_on_start = os.getenv("RUN_ON_START", "false").lower() == "true"
+    backfill_after_scrape = os.getenv("BACKFILL_AFTER_SCRAPE", "true").lower() == "true"
+    backfill_python_bin = os.getenv("BACKFILL_PYTHON_BIN", "python")
+    backfill_project_dir = os.getenv("BACKFILL_PROJECT_DIR", "/app")
+    backfill_args = parse_backfill_args(os.getenv("BACKFILL_ARGS", ""))
 
     # Validate timezone early
     ZoneInfo(timezone)
@@ -103,6 +122,10 @@ def build_config() -> SchedulerConfig:
         spider_name=spider_name,
         spider_args=spider_args,
         run_on_start=run_on_start,
+        backfill_after_scrape=backfill_after_scrape,
+        backfill_python_bin=backfill_python_bin,
+        backfill_project_dir=backfill_project_dir,
+        backfill_args=backfill_args,
     )
 
 
@@ -121,6 +144,12 @@ def build_scrapy_command(config: SchedulerConfig) -> List[str]:
     return cmd
 
 
+def build_backfill_command(config: SchedulerConfig) -> List[str]:
+    cmd = [config.backfill_python_bin, "-m", "SeekSpider.backfill"]
+    cmd.extend(config.backfill_args)
+    return cmd
+
+
 def run_spider_job(config: SchedulerConfig) -> None:
     if not RUN_LOCK.acquire(blocking=False):
         LOGGER.warning("Previous run still active. Skipping this trigger.")
@@ -128,6 +157,7 @@ def run_spider_job(config: SchedulerConfig) -> None:
 
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     cmd = build_scrapy_command(config)
+    exit_code = None
 
     LOGGER.info("Job started | run_id=%s", run_id)
     LOGGER.info("Executing command: %s", " ".join(shlex.quote(part) for part in cmd))
@@ -172,6 +202,63 @@ def run_spider_job(config: SchedulerConfig) -> None:
         LOGGER.exception("Unhandled exception while running spider | run_id=%s", run_id)
     finally:
         RUN_LOCK.release()
+
+    if exit_code == 0 and config.backfill_after_scrape:
+        run_backfill_job(config, parent_run_id=run_id)
+
+
+def run_backfill_job(config: SchedulerConfig, parent_run_id: str | None = None) -> None:
+    if not BACKFILL_LOCK.acquire(blocking=False):
+        LOGGER.warning("Previous backfill run still active. Skipping this trigger.")
+        return
+
+    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    cmd = build_backfill_command(config)
+    parent_info = parent_run_id or "none"
+
+    LOGGER.info("Backfill started | run_id=%s | parent_run_id=%s", run_id, parent_info)
+    LOGGER.info("Executing command: %s", " ".join(shlex.quote(part) for part in cmd))
+    LOGGER.info("Working directory: %s", config.backfill_project_dir)
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            cwd=config.backfill_project_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+            env=os.environ.copy(),
+        )
+
+        stdout_thread = threading.Thread(
+            target=stream_pipe,
+            args=(process.stdout, LOGGER.info),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=stream_pipe,
+            args=(process.stderr, LOGGER.info),
+            daemon=True,
+        )
+
+        stdout_thread.start()
+        stderr_thread.start()
+
+        exit_code = process.wait()
+        stdout_thread.join(timeout=5)
+        stderr_thread.join(timeout=5)
+
+        if exit_code == 0:
+            LOGGER.info("Backfill finished successfully | run_id=%s | exit_code=%s", run_id, exit_code)
+        else:
+            LOGGER.error("Backfill failed | run_id=%s | exit_code=%s", run_id, exit_code)
+
+    except Exception:
+        LOGGER.exception("Unhandled exception while running backfill | run_id=%s", run_id)
+    finally:
+        BACKFILL_LOCK.release()
 
 
 def schedule_jobs(scheduler: BlockingScheduler, config: SchedulerConfig) -> None:
@@ -248,6 +335,11 @@ def main() -> None:
         ",".join(f"{h:02d}:{m:02d}" for h, m in config.weekend_schedule_times),
         config.spider_name,
         ",".join(config.spider_args) if config.spider_args else "(none)",
+    )
+    LOGGER.info(
+        "Backfill | after_scrape=%s | args=%s",
+        config.backfill_after_scrape,
+        " ".join(shlex.quote(arg) for arg in config.backfill_args) if config.backfill_args else "(none)",
     )
 
     scheduler = BlockingScheduler(timezone=ZoneInfo(config.timezone))

@@ -265,6 +265,22 @@ python -m SeekSpider.backfill --region-filter Melbourne --workers 3
 python -m SeekSpider.backfill --include-inactive --limit 50
 ```
 
+### Chained Backfill After Scrape
+
+To run backfill right after each scheduled scrape, enable the scheduler chain and pass the backfill CLI flags via env:
+
+```bash
+BACKFILL_AFTER_SCRAPE=true
+BACKFILL_ARGS="--region-filter Melbourne --limit 100 --workers 2"
+BACKFILL_PYTHON_BIN=python
+BACKFILL_PROJECT_DIR=/app
+```
+
+Notes:
+- Backfill runs only after a successful scrape (exit code 0).
+- Backfill executes in its own subprocess, so failures do not stop the scheduler or future scrapes.
+- Chaining backfill can extend each scrape window; keep limits conservative on SQLite to avoid lock contention.
+
 ## Validation Checklist
 
 Run these checks after setup/migration:
