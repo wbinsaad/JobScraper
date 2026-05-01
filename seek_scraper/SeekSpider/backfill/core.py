@@ -70,8 +70,9 @@ class JobDescriptionBackfiller:
         # Build WHERE clause conditions
         conditions = ['("JobDescription" IS NULL OR "JobDescription" = \'\' OR "JobDescription" = \'None\')']
 
-        if not self.config.include_inactive:
-            conditions.append('"IsActive" = \'True\'')
+        # Cancel it to update parames 
+        # if not self.config.include_inactive:
+        #     conditions.append('"IsActive" = \'True\'')
 
         if self.config.region_filter:
             conditions.append('"Region" = %s')

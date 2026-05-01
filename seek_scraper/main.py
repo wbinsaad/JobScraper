@@ -104,7 +104,7 @@ def build_config() -> SchedulerConfig:
     scrapy_project_dir = os.getenv("SCRAPY_PROJECT_DIR", "/app")
     spider_name = os.getenv("SPIDER_NAME", "seek")
     spider_args = parse_spider_args(os.getenv("SPIDER_ARGS", "region=Melbourne"))
-    run_on_start = os.getenv("RUN_ON_START", "false").lower() == "true"
+    run_on_start = os.getenv("RUN_ON_START", "true").lower() == "true"
     backfill_after_scrape = os.getenv("BACKFILL_AFTER_SCRAPE", "true").lower() == "true"
     backfill_python_bin = os.getenv("BACKFILL_PYTHON_BIN", "python")
     backfill_project_dir = os.getenv("BACKFILL_PROJECT_DIR", "/app")
