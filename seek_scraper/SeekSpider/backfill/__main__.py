@@ -76,10 +76,10 @@ Examples:
     # Processing options
     parser.add_argument('--limit', type=int, default=None,
                         help='Maximum number of jobs to process (default: no limit)')
-    parser.add_argument('--delay', type=float, default=5.0,
-                        help='Base delay between requests in seconds (default: 5.0)')
-    parser.add_argument('--workers', type=int, default=3,
-                        help='Number of concurrent workers (1-5, default: 3)')
+    parser.add_argument('--delay', type=float, default=10.0,
+                        help='Base delay between requests in seconds (default: 10.0)')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Number of concurrent workers (1-5, default: 1)')
 
     # Browser options
     parser.add_argument('--headless', action='store_true',
