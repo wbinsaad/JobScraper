@@ -56,7 +56,7 @@ class SeekConnector:
             "title": item.get("job_title"),
             "company": item.get("business_name"),
             "location": location or None,
-            "description": None,
+            "description": item.get("job_description") or item.get("description"),
             "job_type": item.get("job_type") or item.get("work_type"),
             "pay_range_text": item.get("pay_range"),
         }

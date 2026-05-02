@@ -140,6 +140,7 @@ class JobItem(BaseModel):
     url: Optional[str]
     advertiser_id: Optional[str]
     job_type: Optional[str]
+    job_description: Optional[str]
     posted_date: Optional[datetime]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
@@ -356,6 +357,7 @@ async def get_jobs(
                 "Url" as url,
                 "AdvertiserId" as advertiser_id,
                 "JobType" as job_type,
+                "JobDescription" as job_description,
                 "PostedDate" as posted_date,
                 "CreatedAt" as created_at,
                 "UpdatedAt" as updated_at,
