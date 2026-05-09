@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from aggregator_service.api.routes import build_router
 from aggregator_service.config import get_settings
 from aggregator_service.db import apply_migrations, connect
+from aggregator_service.ai_client import GroqChatClient, RateLimiter
 from aggregator_service.sources.http_client import LoggedHttpClient
 from aggregator_service.sources.jobspy import JobSpyConnector
 from aggregator_service.sources.seek import SeekConnector
 from aggregator_service.tasks.scheduler import IntervalScheduler
 from aggregator_service.tasks.sync_jobs import SyncJobsTask
+from aggregator_service.services.scoring_service import RelevanceScoringService
 
 
 settings = get_settings()
@@ -36,7 +38,30 @@ def _build_sync_task() -> SyncJobsTask:
             http_client=http_client,
         ),
     }
-    return SyncJobsTask(con_factory=_con_factory, connectors=connectors)
+    rate_limiter = RateLimiter(
+        rpm=settings.ai_rpm,
+        rpd=settings.ai_rpd,
+        tpm=settings.ai_tpm,
+        tpd=settings.ai_tpd,
+        safety=settings.ai_safety_factor,
+    )
+    ai_client = GroqChatClient(
+        base_url=settings.ai_base_url,
+        api_key=settings.ai_api_key,
+        model=settings.ai_model,
+        rate_limiter=rate_limiter,
+        timeout_seconds=settings.ai_timeout_seconds,
+        max_response_tokens=settings.ai_max_response_tokens,
+    )
+    scoring_service = RelevanceScoringService(
+        con_factory=_con_factory,
+        client=ai_client,
+        system_prompt=settings.ai_system_prompt,
+        max_request_tokens=settings.ai_max_request_tokens,
+        max_response_tokens=settings.ai_max_response_tokens,
+    )
+
+    return SyncJobsTask(con_factory=_con_factory, connectors=connectors, scoring_service=scoring_service)
 
 
 @asynccontextmanager

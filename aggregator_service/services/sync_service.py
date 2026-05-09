@@ -7,7 +7,15 @@ def now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def run_sync(*, con, connectors: dict, task_id: str, trigger_type: str, selected_sources: list[str] | None = None) -> dict:
+def run_sync(
+    *,
+    con,
+    connectors: dict,
+    task_id: str,
+    trigger_type: str,
+    selected_sources: list[str] | None = None,
+    scoring_service=None,
+) -> dict:
     run_row = con.execute(
         """
         INSERT INTO source_sync_runs(started_at, overall_status, trigger_type)
@@ -45,7 +53,15 @@ def run_sync(*, con, connectors: dict, task_id: str, trigger_type: str, selected
         (now_utc_iso(), overall, None if overall != "failed" else "All sources failed", run_id),
     )
     con.commit()
-    return {"run_id": run_id, "status": overall, "sources": summary}
+    result: dict = {"run_id": run_id, "status": overall, "sources": summary}
+
+    if scoring_service is not None:
+        try:
+            result["scoring"] = scoring_service.score_run(run_id=run_id)
+        except Exception as exc:
+            result["scoring"] = {"status": "error", "error": str(exc)}
+
+    return result
 
 
 def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
@@ -94,7 +110,7 @@ def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
                 canonical = connector.to_canonical(item)
                 if not canonical:
                     continue
-                upserted_id, was_insert = _upsert_canonical(con=con, canonical=canonical)
+                upserted_id, was_insert = _upsert_canonical(con=con, canonical=canonical, run_id=run_id)
                 if was_insert:
                     inserted_count += 1
                 else:
@@ -196,7 +212,7 @@ def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
         }
 
 
-def _upsert_canonical(*, con, canonical: dict) -> tuple[int, bool]:
+def _upsert_canonical(*, con, canonical: dict, run_id: int) -> tuple[int, bool]:
     row = con.execute(
         "SELECT id FROM jobs_canonical WHERE normalized_job_url=?",
         (canonical["normalized_job_url"],),
@@ -220,6 +236,7 @@ def _upsert_canonical(*, con, canonical: dict) -> tuple[int, bool]:
                 int(row["id"]),
             ),
         )
+        _record_job_change(con=con, run_id=run_id, canonical_job_id=int(row["id"]), change_type="update")
         return int(row["id"]), False
 
     new_row = con.execute(
@@ -242,4 +259,22 @@ def _upsert_canonical(*, con, canonical: dict) -> tuple[int, bool]:
             now_utc_iso(),
         ),
     ).fetchone()
+    _record_job_change(con=con, run_id=run_id, canonical_job_id=int(new_row["id"]), change_type="insert")
     return int(new_row["id"]), True
+
+
+def _record_job_change(*, con, run_id: int, canonical_job_id: int, change_type: str) -> None:
+    con.execute(
+        """
+        INSERT INTO job_run_changes(run_id, canonical_job_id, change_type, changed_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(run_id, canonical_job_id)
+        DO UPDATE SET
+            change_type = CASE
+                WHEN job_run_changes.change_type = 'insert' THEN 'insert'
+                ELSE excluded.change_type
+            END,
+            changed_at = excluded.changed_at
+        """,
+        (run_id, canonical_job_id, change_type, now_utc_iso()),
+    )
