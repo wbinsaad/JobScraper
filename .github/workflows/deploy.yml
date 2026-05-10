@@ -38,6 +38,7 @@ jobs:
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> infra/.env
           echo "HTTP_PROXY=${{ secrets.HTTP_PROXY }}" >> infra/.env
           echo "HTTPS_PROXY=${{ secrets.HTTPS_PROXY }}" >> infra/.env
+          echo "AGG_AI_SYSTEM_PROMPT=${{ vars.AGG_AI_SYSTEM_PROMPT }}" >> infra/.env
 
       - name: Build and run containers
         run: |
