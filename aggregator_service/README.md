@@ -15,6 +15,7 @@ Standalone FastAPI service that:
 - `GET /api/v1/jobs`
 - `GET /api/v1/profiles`
 - `GET /api/v1/profiles/{profile_id}`
+- `GET /api/v1/profiles/{profile_id}/jobs`
 - `POST /api/v1/profiles`
 - `PUT /api/v1/profiles/{profile_id}`
 - `DELETE /api/v1/profiles/{profile_id}`
