@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -74,7 +74,7 @@ def get_profile(profile_id: int, request: Request):
 def list_profile_jobs(
     profile_id: int,
     request: Request,
-    first_seen: str | None = Query(default=None),
+    first_seen_hours: int | None = Query(default=None, ge=0, le=8760),
     min_score: int | None = Query(default=None, ge=0, le=9),
     max_score: int | None = Query(default=None, ge=0, le=9),
     job_title: str | None = Query(default=None),
@@ -100,9 +100,11 @@ def list_profile_jobs(
         if max_score is not None:
             where_parts.append("s.score <= ?")
             params.append(max_score)
-        if first_seen:
+        if first_seen_hours is not None:
+            cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=first_seen_hours)
+            cutoff_iso = cutoff_dt.isoformat()
             where_parts.append("(c.first_seen_at >= ? OR c.first_seen_at IS NULL)")
-            params.append(first_seen)
+            params.append(cutoff_iso)
         if job_title:
             where_parts.append("c.title IS NOT NULL AND lower(c.title) LIKE ?")
             params.append(f"%{job_title.lower()}%")
