@@ -30,14 +30,14 @@ updates:
 
   # Python packages for the scraper service
   - package-ecosystem: "pip"
-    directory: "/scraper"
+    directory: "/jobspy_scraper"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "03:10"
     open-pull-requests-limit: 10
     versioning-strategy: increase-if-necessary
-    labels: ["dependencies", "python", "scraper"]
+    labels: ["dependencies", "python", "jobspy_scraper"]
     groups:
       patch-minor:
         update-types: ["patch", "minor"]

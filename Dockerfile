@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install both apps' dependencies (scraper and matcher)
-COPY scraper/requirements.txt /app/scraper/requirements.txt
+# Install both apps' dependencies (jobspy_scraper and matcher)
+COPY jobspy_scraper/requirements.txt /app/jobspy_scraper/requirements.txt
 COPY matcher/requirements.txt /app/matcher/requirements.txt
-RUN pip install --no-cache-dir -r /app/scraper/requirements.txt \
+RUN pip install --no-cache-dir -r /app/jobspy_scraper/requirements.txt \
     && pip install --no-cache-dir -r /app/matcher/requirements.txt
 
 # Install Flask and any other dependencies for the Flask app

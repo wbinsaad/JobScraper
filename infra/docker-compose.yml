@@ -165,7 +165,7 @@ services:
     depends_on:
       - migrate
     working_dir: /app
-    command: ["python", "-m", "scraper.main", "serve", "--config", "/app/config.yaml"]
+    command: ["python", "-m", "jobspy_scraper.main", "serve", "--config", "/app/config.yaml"]
     restart: unless-stopped
     volumes:
       - /var/lib/jobs-app/data:/app/data

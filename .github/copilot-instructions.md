@@ -20,8 +20,8 @@
 - No automated tests or lint configuration are currently defined at repo level. Validate changes by running impacted service(s) directly.
 - Common commands (run from repository root):
   - python infra/migrate.py
-  - python -m scraper.main run --config config.yaml
-  - python -m scraper.main serve --config config.yaml
+  - python -m jobspy_scraper.main run --config config.yaml
+  - python -m jobspy_scraper.main serve --config config.yaml
   - python matcher/main.py
   - python flask_app/app.py
   - uvicorn jobspy_api.main:app --reload --port 8000
