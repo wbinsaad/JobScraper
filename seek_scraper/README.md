@@ -1,360 +1,122 @@
-# SeekSpider
+# Seek Scraper
 
-A Seek.com.au job scraper system built on the Plombery task scheduling framework, designed for automated collection of Australian IT job listings.
+Scrapy-based spider that scrapes IT job listings from Seek.com.au across Australian regions, with an APScheduler-driven scheduler for automated weekday/weekend runs and an optional backfill step for job descriptions.
 
-## Features
+## How It Works
 
-- **Multi-Region Support** - Scrape jobs from Perth, Sydney, Melbourne, Brisbane, Adelaide, Canberra and more
-- **Automated Scraping** - Scheduled crawling of Seek.com.au IT job listings
-- **AI Analysis** - Automatic tech stack extraction and salary normalization using AI
-- **Web UI** - Visual task management interface powered by Plombery
-- **Database Storage** - PostgreSQL/Supabase data persistence
-- **Multi-Pipeline Scheduling** - Support for multiple data collection pipelines running in parallel
+1. The **scheduler** (`main.py`) launches Scrapy crawls as subprocesses on configurable cron schedules.
+2. The **spider** (`SeekSpider/spiders/seek.py`) iterates through all IT subcategories (classification `6281`) via Seek's search API, then visits each job detail page for metadata (suburb, work type, salary).
+3. The **pipeline** upserts jobs into the database, marks jobs not found in the current scrape as inactive (per region), and exports results to JSONL files.
+4. The **backfill** module (`SeekSpider/backfill/`) separately fetches full job descriptions using a headless Chromium browser to handle Cloudflare challenges.
+
+> **Note**: The spider intentionally does not scrape `JobDescription` — this is handled exclusively by the backfill script to avoid overwriting existing descriptions.
 
 ## Supported Regions
 
-| Region | Seek Location |
-|--------|---------------|
-| Perth | All Perth WA |
-| Sydney | All Sydney NSW |
-| Melbourne | All Melbourne VIC |
-| Brisbane | All Brisbane QLD |
-| Gold Coast | All Gold Coast QLD |
-| Adelaide | All Adelaide SA |
-| Canberra | All Canberra ACT |
-| Hobart | All Hobart TAS |
-| Darwin | All Darwin NT |
+Perth, Sydney, Melbourne, Brisbane, Gold Coast, Adelaide, Canberra, Hobart, Darwin.
+
+Configured in `SeekSpider/core/regions.py`. Default: `Perth`.
 
 ## Project Structure
 
 ```
-SeekSpider/
-├── pipeline/                    # Pipeline definitions
-│   └── src/
-│       ├── app.py              # Application entry point
-│       ├── seek_spider_pipeline.py     # Seek scraper pipeline
-│       ├── flow_meter_pipeline.py      # Flow meter data pipeline
-│       └── ...                         # Other pipelines
-├── scraper/                     # Scraper modules
-│   └── SeekSpider/             # Seek spider
-│       ├── spiders/
-│       │   └── seek.py         # Main spider logic
-│       ├── core/
-│       │   ├── config.py       # Configuration management
-│       │   ├── database.py     # Database operations
-│       │   ├── regions.py      # Australian regions configuration
-│       │   └── ai_client.py    # AI API client
-│       ├── utils/
-│       │   ├── tech_stack_analyzer.py    # Tech stack analysis
-│       │   ├── salary_normalizer.py      # Salary normalization
-│       │   └── tech_frequency_analyzer.py # Tech frequency statistics
-│       ├── scripts/
-│       │   └── add_region_column.py      # Database migration script
-│       ├── pipelines.py        # Scrapy pipeline
-│       └── settings.py         # Scrapy settings
-├── src/plombery/               # Plombery core
-├── frontend/                   # React frontend
-└── .env                        # Environment configuration
+seek_scraper/
+├── main.py                  # APScheduler entry point
+├── scrapy.cfg               # Scrapy project config
+├── Dockerfile               # Python 3.11 + Chromium (for backfill)
+├── requirements.txt
+├── .env.example             # Environment template
+├── SeekSpider/
+│   ├── spiders/seek.py      # Main spider (Seek API + detail pages)
+│   ├── pipelines.py         # DB upsert + JSON export + expiry marking
+│   ├── middlewares.py       # Custom retry + fake user-agent
+│   ├── settings.py          # Scrapy settings
+│   ├── items.py             # Item schema
+│   ├── core/
+│   │   ├── config.py        # Env-based config with validation
+│   │   ├── database.py      # DatabaseManager (SQLite / PostgreSQL)
+│   │   ├── regions.py       # Region → Seek location mapping
+│   │   ├── output_manager.py
+│   │   └── logger.py
+│   └── backfill/            # Headless browser job description fetcher
+│       ├── __main__.py      # CLI entry point
+│       ├── core.py          # Backfill logic
+│       ├── config.py        # Backfill config
+│       └── drivers.py       # Chromium/Selenium driver setup
+└── docker/
+    ├── postgres/             # PostgreSQL init SQL
+    └── sqlite/               # SQLite init SQL
 ```
 
-## Quick Start
+## Environment Variables
 
-### 1. Install Dependencies
+Copy `.env.example` to `.env` for local development. In CI/CD, set variables directly in the runtime environment.
 
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -e .
-pip install -r requirements.txt
-```
-
-### 2. Configure Environment Variables
-
-#### Local development (optional `.env`)
-
-For local convenience, copy `scraper/.env.example` to `scraper/.env` and set values:
-
-```bash
-cp scraper/.env.example scraper/.env
-```
-
-This local file is optional and gitignored. Runtime process environment variables take precedence when both are present.
-
-#### Staging/production (GitHub Environment only)
-
-CI/CD does not generate or mount `scraper/.env`. Deployments read values only from GitHub Environment `vars` and `secrets` at runtime.
-
-Use:
-- GitHub `vars` for non-sensitive values (engine, host, port, table, paths).
-- GitHub `secrets` for sensitive values (passwords, API keys).
-
-#### Variable matrix (canonical contract)
-
-| Canonical variable | Aliases | Required when `DATABASE_ENGINE=sqlite` | Required when `DATABASE_ENGINE=postgres` |
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| `DATABASE_ENGINE` | - | yes (`sqlite`) | yes (`postgres`) |
-| `SQLITE_DB_PATH` | - | yes | no |
-| `DATABASE_TABLE` | `POSTGRESQL_TABLE`, `POSTGRES_TABLE` | yes | yes |
-| `POSTGRESQL_HOST` | `POSTGRES_HOST` | no | yes |
-| `POSTGRESQL_PORT` | `POSTGRES_PORT` | no | yes |
-| `POSTGRESQL_USER` | `POSTGRES_USER` | no | yes |
-| `POSTGRESQL_PASSWORD` | `POSTGRES_PASSWORD` | no | yes |
-| `POSTGRESQL_DATABASE` | `POSTGRES_DB` | no | yes |
+| `DATABASE_ENGINE` | yes | — | `sqlite` or `postgres` |
+| `SQLITE_DB_PATH` | if sqlite | — | Path to SQLite database file |
+| `DATABASE_TABLE` | yes | — | Table name (e.g. `seek_jobs`) |
+| `POSTGRESQL_HOST` | if postgres | — | PostgreSQL host |
+| `POSTGRESQL_PORT` | if postgres | — | PostgreSQL port |
+| `POSTGRESQL_USER` | if postgres | — | PostgreSQL user |
+| `POSTGRESQL_PASSWORD` | if postgres | — | PostgreSQL password |
+| `POSTGRESQL_DATABASE` | if postgres | — | PostgreSQL database name |
 
-Precedence is canonical first, then aliases for backward compatibility.
+Aliases `POSTGRES_HOST`, `POSTGRES_PORT`, etc. are supported for backward compatibility. Canonical names take precedence.
 
-#### Troubleshooting
+### Scheduler Variables
 
-1. **`docker compose config` fails before deploy**
-	- Cause: missing required interpolation variables.
-	- Fix: set missing GitHub Environment `vars`/`secrets` for the target environment.
+| Variable | Default | Description |
+|---|---|---|
+| `SCHEDULER_TIMEZONE` | `Australia/Melbourne` | Timezone for schedule triggers |
+| `WEEKDAY_SCHEDULE_TIMES` | `08:00,10:00,...,22:00` | Comma-separated `HH:MM` times (Mon–Fri) |
+| `WEEKEND_SCHEDULE_TIMES` | `10:00,14:00,18:00,22:00` | Comma-separated `HH:MM` times (Sat–Sun) |
+| `SPIDER_NAME` | `seek` | Scrapy spider name |
+| `SPIDER_ARGS` | `region=Melbourne` | `key=value` pairs passed to spider |
+| `RUN_ON_START` | `true` | Run one immediate crawl on startup |
+| `BACKFILL_AFTER_SCRAPE` | `false` | Chain backfill after each successful scrape |
+| `BACKFILL_ARGS` | — | CLI args for backfill (e.g. `--region-filter Melbourne --limit 100`) |
 
-2. **Startup error: invalid/missing DB configuration**
-	- Cause: selected engine does not have its required variables.
-	- Fix: for `sqlite`, set `SQLITE_DB_PATH` + `DATABASE_TABLE`; for `postgres`, set host/port/user/password/database/table.
+## Running Locally
 
-3. **Alias confusion**
-	- Fix: prefer canonical `POSTGRESQL_*` names in new config and keep aliases only for compatibility.
-
-### 3. Run
+### Direct
 
 ```bash
-# Option 1: Run via Pipeline (recommended)
-cd pipeline
-./run.sh
+pip install -r requirements.txt
 
-# Option 2: Run spider directly for a specific region
-cd scraper
-scrapy crawl seek -a region=Perth
-scrapy crawl seek -a region=Sydney
+# Run spider once for a region
 scrapy crawl seek -a region=Melbourne
+
+# Run the scheduler (cron-based)
+python main.py
 ```
 
-Access the Web UI at `http://localhost:8000`.
-
-## Run Modes
-
-### SQLite Quick Start (recommended for local)
-
-1. Set `.env` to SQLite mode:
-
-```env
-DATABASE_ENGINE=sqlite
-SQLITE_DB_PATH=./data/seek_jobs.sqlite3
-DATABASE_TABLE=seek_jobs
-```
-
-2. Start services (SQLite-first compose):
+### Docker Compose (from project root)
 
 ```bash
-docker compose up -d scheduler api
+# Via the infra compose
+docker compose -f infra/docker-compose.yml up seek_scraper
 ```
 
-3. Verify API:
+### Backfill Job Descriptions
 
 ```bash
-curl http://127.0.0.1:6059/health
-curl http://127.0.0.1:6059/regions
-curl "http://127.0.0.1:6059/jobs?limit=5"
+python -m SeekSpider.backfill --region-filter Melbourne --limit 100
 ```
 
-Notes:
-- SQLite schema is auto-initialized on startup (table + indexes) for empty DB files.
-- The DB file is shared between containers through `./data:/app/data`.
+> **Warning**: Backfill uses headless Chromium which is resource-intensive. Keep `--limit` conservative when running alongside the scraper to avoid SQLite lock contention.
 
-### PostgreSQL Compatibility Mode (optional)
+## Database
 
-1. Set `.env` to PostgreSQL mode:
+- **SQLite**: Schema auto-initialised on startup from `docker/sqlite/init/001-init-seek_jobs.sqlite.sql`.
+- **PostgreSQL**: Init SQL in `docker/postgres/init/`.
 
-```env
-DATABASE_ENGINE=postgres
-POSTGRESQL_HOST=postgres
-POSTGRESQL_PORT=5432
-POSTGRESQL_USER=seekuser
-POSTGRESQL_PASSWORD=seekpass
-POSTGRESQL_DATABASE=seekdb
-DATABASE_TABLE=seek_jobs
-```
+Both engines are supported interchangeably via `DATABASE_ENGINE`. The `DatabaseManager` normalises query placeholders (`%s` ↔ `?`) transparently.
 
-2. Start with PostgreSQL profile:
+## Key Design Decisions
 
-```bash
-docker compose --profile postgres up -d
-```
-
-3. API remains at:
-
-```bash
-http://127.0.0.1:6059
-```
-
-## Seek Spider Pipeline
-
-### Capabilities
-
-- Scrapes IT job listings from Seek.com.au across multiple Australian regions
-- Covers all IT subcategories (Development, Architecture, DevOps, Testing, etc.)
-- Automatically extracts job details (salary, location, job description, etc.)
-- AI post-processing: tech stack extraction, salary normalization
-- Region-aware job expiry tracking (jobs are marked expired per region)
-
-### Scheduled Tasks
-
-The pipeline is configured with scheduled triggers for each region (Perth timezone):
-
-| Region | Morning | Evening |
-|--------|---------|---------|
-| Perth | 6:00 AM | 6:00 PM |
-| Sydney | 6:15 AM | 6:15 PM |
-| Melbourne | 6:30 AM | 6:30 PM |
-| Brisbane | 6:45 AM | 6:45 PM |
-| Adelaide | 7:00 AM | 7:00 PM |
-| Canberra | 7:15 AM | 7:15 PM |
-
-### Configuration Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `region` | Australian region (Perth, Sydney, Melbourne, etc.) | Perth |
-| `classification` | Job classification code | 6281 (IT) |
-| `run_post_processing` | Run AI post-processing | true |
-| `concurrent_requests` | Number of concurrent requests | 16 |
-| `download_delay` | Request delay (seconds) | 2.0 |
-
-## Database Schema
-
-The spider stores data in PostgreSQL with the following main fields:
-
-| Field | Description |
-|-------|-------------|
-| Id | Job ID (Seek Job ID) |
-| JobTitle | Job title |
-| BusinessName | Company name |
-| WorkType | Work type (Full-time/Part-time/Contract) |
-| JobType | Job category |
-| PayRange | Salary range |
-| Region | Australian region (Perth, Sydney, Melbourne, etc.) |
-| Area | Detailed region/area |
-| Suburb | Detailed location |
-| JobDescription | Job description (HTML) |
-| TechStack | Tech stack (AI extracted) |
-| Url | Job URL |
-| PostedDate | Posted date |
-| IsActive | Whether the job is active |
-
-### Database Migration
-
-Current migration/initialization paths:
-
-- SQLite: no manual schema migration needed for first run; startup auto-creates `seek_jobs` + indexes.
-- PostgreSQL: initialization SQL is in `docker/postgres/init/001-init-seek_jobs.sql` (applied by postgres container entrypoint).
-- Backfill job descriptions (both engines):
-
-```bash
-cd scraper
-python -m SeekSpider.backfill --region Melbourne --limit 100
-```
-
-Useful backfill variants:
-
-```bash
-python -m SeekSpider.backfill --region-filter Melbourne --workers 3
-python -m SeekSpider.backfill --include-inactive --limit 50
-```
-
-### Chained Backfill After Scrape
-
-To run backfill right after each scheduled scrape, enable the scheduler chain and pass the backfill CLI flags via env:
-
-```bash
-BACKFILL_AFTER_SCRAPE=true
-BACKFILL_ARGS="--region-filter Melbourne --limit 100 --workers 2"
-BACKFILL_PYTHON_BIN=python
-BACKFILL_PROJECT_DIR=/app
-```
-
-Notes:
-- Backfill runs only after a successful scrape (exit code 0).
-- Backfill executes in its own subprocess, so failures do not stop the scheduler or future scrapes.
-- Chaining backfill can extend each scrape window; keep limits conservative on SQLite to avoid lock contention.
-
-## Validation Checklist
-
-Run these checks after setup/migration:
-
-1. Spider run creates/updates rows
-	- Run spider once for a region and confirm rows exist in `seek_jobs`.
-	- Re-run same region and confirm existing IDs are updated (not duplicated).
-
-2. Expiry marking works
-	- After a new run, verify jobs not in current scrape are marked inactive for that region.
-	- Confirm `IsActive` becomes false/0 and `ExpiryDate` is set.
-
-3. Backfill updates `JobDescription`
-	- Run backfill with a small limit.
-	- Confirm `JobDescription` is populated for processed rows.
-
-4. API endpoints return expected results
-	- `GET /health` returns healthy
-	- `GET /regions` returns known regions
-	- `GET /jobs` supports filters/pagination/sort
-	- `GET /jobs/{id}` returns the expected row
-
-## SQLite Troubleshooting
-
-### `database is locked` / write lock contention
-
-Symptoms:
-- Errors like `sqlite3.OperationalError: database is locked`
-- Frequent concurrent writers (scraper + backfill + other tools)
-
-Mitigations:
-- Prefer a single active writer process when possible.
-- Keep write transactions short (already handled in code paths that commit quickly).
-- Use WAL mode for better read/write concurrency.
-
-Enable WAL mode:
-
-```bash
-sqlite3 ./data/seek_jobs.sqlite3 "PRAGMA journal_mode=WAL;"
-sqlite3 ./data/seek_jobs.sqlite3 "PRAGMA synchronous=NORMAL;"
-```
-
-Check current mode:
-
-```bash
-sqlite3 ./data/seek_jobs.sqlite3 "PRAGMA journal_mode;"
-```
-
-Known limitations in SQLite mode:
-- Less suitable than PostgreSQL for heavy concurrent write workloads.
-- Large backfill + scraping at the same time can increase lock contention.
-
-## Docker Deployment
-
-```bash
-# Build and start
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop
-docker compose down
-```
-
-## Tech Stack
-
-- **Scraping Framework**: Scrapy
-- **Task Scheduling**: Plombery (APScheduler)
-- **Web Framework**: FastAPI
-- **Frontend**: React + Vite
-- **Database**: PostgreSQL
-- **AI API**: DeepSeek / OpenAI-compatible API
-
-## License
-
-MIT License
+- **Spider does not write `JobDescription`**: Only the backfill script writes descriptions, preventing accidental overwrites from Cloudflare-blocked responses returning empty content.
+- **Per-region expiry**: When a scrape completes, jobs for that region not found in the current run are marked `IsActive=false`. Other regions are unaffected.
+- **Threading locks**: `RUN_LOCK` and `BACKFILL_LOCK` prevent overlapping scrape or backfill runs from concurrent scheduler triggers.
+- **Dual-engine support**: SQLite for zero-ops local/dev; PostgreSQL for production workloads.
