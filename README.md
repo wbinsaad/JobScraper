@@ -119,10 +119,12 @@ Both matcher and aggregator implement client-side rate limiting that respects Gr
 ├── jobspy_api/                  # Read-only API for LinkedIn jobs
 ├── seek_scraper/                # Seek.com.au scraper + scheduler
 ├── seek_api/                    # Read-only API for Seek jobs
+├── tests/                       # Aggregator Service Tests
 ├── aggregator_service/          # Unified aggregator with AI scoring
 ├── data/                        # Runtime SQLite databases (gitignored)
 └── .github/
-    ├── workflows/deploy.yml     # CI/CD: build + deploy on push to main
+    ├── workflows/deploy.yml     # CD: build + deploy on push to main
+    ├── workflows/ci.yml         # CI: Unit and Integration Tests
     ├── dependabot.yml           # Automated dependency updates
     └── copilot-instructions.md  # Project guidelines for AI tools
 ```
