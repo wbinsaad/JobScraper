@@ -374,7 +374,7 @@ Dependabot is configured (`.github/dependabot.yml`) to check weekly for updates 
 
 ## Known Limitations
 
-- **No automated tests**: There is no test suite or lint configuration at the repo level. Changes should be validated by running the affected service directly.
+- **Minimal automated coverage only**: The repository now has four focused aggregator tests, but the scraper, matcher loop, Flask dashboard, and API endpoints still need broader coverage.
 - **Hardcoded Flask DB path**: `flask_app/app.py` connects to `/app/data/jobs.db` (a Docker path). Running locally requires the database to exist at that path or a code change.
 - **Stage 2 is currently disabled in the matcher loop**: The `claim_stage2_batch` call is commented out in `matcher/main.py`. Stage 2 processing does not execute in the current main loop.
 - **Missing `import os` in `matcher/ai_client.py`**: The module references `os.getenv` without importing `os` at the module level.
@@ -388,3 +388,16 @@ Each subsystem has its own README with endpoint specifications, environment vari
 - [`seek_api/README.md`](seek_api/README.md) — Seek API endpoints, filtering, and response format
 - [`seek_scraper/README.md`](seek_scraper/README.md) — Seek spider setup, scheduling, regions, and troubleshooting
 - [`aggregator_service/README.md`](aggregator_service/README.md) — Aggregator endpoints, AI config, and environment variables
+
+## Testing
+
+The deliberately small test suite exercises the aggregator's URL canonicalisation, AI-score validation, SQLite deduplication, and failed-sync checkpoint handling. It uses a temporary SQLite database and replaces source connectors with fakes; an autouse fixture fails the test immediately if code attempts a live HTTP request.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --disable-pip-version-check -r requirements-test.txt
+python -m pytest -q
+```
+
+No API keys, Telegram credentials, scraper access, production database, or Docker services are required.
