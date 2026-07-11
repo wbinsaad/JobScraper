@@ -6,7 +6,7 @@ import uuid
 from db import ai_audit_start, ai_audit_finish
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-API_KEY = "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" # os.getenv("GROQ_API_KEY")
+API_KEY = os.getenv("GROQ_API_KEY")
 
 _RE_WAIT = re.compile(r"try again in ([0-9.]+)s", re.I)
 
