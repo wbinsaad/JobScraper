@@ -3,6 +3,7 @@ import requests
 import time
 import re
 import uuid
+import os
 from db import ai_audit_start, ai_audit_finish
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
