@@ -116,6 +116,8 @@ def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
                 else:
                     updated_count += 1
 
+                source_updated_at = connector.source_updated_at(item)
+
                 con.execute(
                     """
                     INSERT INTO jobs_source_snapshot(
@@ -129,7 +131,7 @@ def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
                         connector.source_job_id(item),
                         to_json_text(item),
                         item.get("posted_date"),
-                        (connector.source_updated_at(item) or None),
+                        source_updated_at.isoformat() if source_updated_at else None,
                         now_utc_iso(),
                     ),
                 )
@@ -143,22 +145,24 @@ def _sync_single_source(*, con, connector, run_id: int, task_id: str) -> dict:
                     (upserted_id, source_name, now_utc_iso(), now_utc_iso(), "seen"),
                 )
 
-            if source_max_seen_ts:
-                con.execute(
-                    """
-                    INSERT INTO source_checkpoints(source_name, last_success_ts, updated_at)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(source_name)
-                    DO UPDATE SET last_success_ts=excluded.last_success_ts, updated_at=excluded.updated_at
-                    """,
-                    (source_name, source_max_seen_ts.isoformat(), now_utc_iso()),
-                )
             con.commit()
 
             if page.next_offset is None:
                 break
             offset = page.next_offset
 
+        if source_max_seen_ts:
+            con.execute(
+                """
+                INSERT INTO source_checkpoints(source_name, last_success_ts, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(source_name)
+                DO UPDATE SET
+                    last_success_ts=excluded.last_success_ts,
+                    updated_at=excluded.updated_at
+                """,
+                (source_name, source_max_seen_ts.isoformat(), now_utc_iso()),
+            )
         con.execute(
             """
             UPDATE source_run_details

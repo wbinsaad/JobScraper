@@ -1,0 +1,73 @@
+name: Automated Tests
+
+run-name: Tests · ${{ github.ref_name }} · ${{ github.event_name }}
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  # Allows the workflow to be started manually from GitHub Actions.
+  workflow_dispatch:
+
+  # Allows deploy.yml to call this workflow later.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automated-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+
+jobs:
+  test:
+    name: Aggregator tests · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version:
+          - "3.11"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          check-latest: true
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+
+      - name: Display environment versions
+        run: |
+          python --version
+          python -m pip --version
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --requirement requirements-test.txt
+
+      - name: Validate Python syntax
+        run: python -m compileall -q aggregator_service tests
+
+      - name: Run automated tests
+        run: python -m pytest -q
