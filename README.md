@@ -1,4 +1,4 @@
-# JobSpy
+# JobScraper
 
 An automated job-search pipeline that scrapes listings from LinkedIn and Seek, scores them against a personal profile using LLM-based multi-stage classification, and sends Telegram alerts for high-relevance matches.
 
@@ -12,8 +12,8 @@ The system is composed of independent services that communicate through a shared
 
 ```
 ┌──────────────┐   ┌──────────────┐
-│ jobspy_scraper│   │ seek_scraper │
-│  (LinkedIn)  │   │  (Seek.com.au)│
+│jobspy_scraper│   │ seek_scraper │
+│  (LinkedIn)  │   │ (Seek.com.au)│
 └──────┬───────┘   └──────┬───────┘
        │  writes           │  writes
        ▼                   ▼
@@ -45,8 +45,8 @@ The system is composed of independent services that communicate through a shared
                       │
                       ▼
                ┌────────────┐
-               │  Telegram   │
-               │  alerts     │
+               │  Telegram  │
+               │  alerts    │
                └────────────┘
 ```
 
